@@ -348,6 +348,20 @@
     {
       "source": "/zones/:path*",
       "destination": "/api/index"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/health/:path*",
+      "destination": "/api/index"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/health/db",
+      "schedule": "0 6 * * *"
     }
   ]
 }

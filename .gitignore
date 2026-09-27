@@ -13,3 +13,5 @@ backend/.nugen_key
 backend/.mail
 .env
 __pycache__/
+backend/.vercel_token
+.vercel

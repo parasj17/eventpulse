@@ -9,3 +9,4 @@ backend/data/nugen_corpus
 contracts
 plan.md
 Dockerfile
+backend/.vercel_token

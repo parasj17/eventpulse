@@ -120,6 +120,20 @@ def _clock_hour():
     return FIRST_HOUR + (start + int((time.time() - _CLOCK_START) / CLOCK_TICK_SECONDS)) % span
 
 
+@app.get("/health/db")
+def health_db():
+    """Touches the database. Vercel calls this daily (vercel.json crons) so the free Supabase
+    project never counts as inactive and is never paused."""
+    from engine import db
+    if not db.enabled():
+        return {"db": "off"}
+    try:
+        n = db.execute("select count(*) from ep_accounts", fetch=True)[0][0]
+        return {"db": "ok", "accounts": n, "at": int(time.time())}
+    except Exception as e:
+        raise HTTPException(503, f"Database unreachable ({type(e).__name__})")
+
+
 @app.get("/clock")
 def get_clock():
     """The current simulated hour, and how long until it next changes."""
