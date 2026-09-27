@@ -1,0 +1,15 @@
+# Generated CSVs. Scoped to backend so it does not also swallow frontend/data,
+# which is the exported bundle the static site actually serves.
+backend/data/
+backend/engine/model.pkl
+
+__pycache__/
+*.pyc
+.env
+node_modules/
+# secrets: never commit
+backend/.supabase
+backend/.nugen_key
+backend/.mail
+.env
+__pycache__/

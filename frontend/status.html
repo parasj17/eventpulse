@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Your event, live — EventPulse</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<style>
+  :root {
+    --bg: #0A0A0A; --panel: #101010; --panel-hi: #171717; --line: #242424;
+    --ink: #F2F2F2; --ink-dim: #A0A0A0; --ink-faint: #6A6A6A;
+    --accent: #FF3B1F; --good: #00C46A; --warn: #D9A441;
+  }
+  * { box-sizing: border-box; }
+  a { color: inherit; }
+  body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.45; }
+  main { max-width: 520px; margin: 0 auto; padding: 22px 18px 70px; }
+  .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .brand { font-weight: 800; font-size: 15px; text-decoration: none; }
+  .brand span { color: var(--accent); }
+  .live { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-dim); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); animation: pulse 1.6s ease-in-out infinite; }
+  .live.stale .dot { background: var(--warn); animation: none; }
+  .live.off .dot { background: var(--ink-faint); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,196,106,.5); } 50% { opacity: .6; box-shadow: 0 0 0 6px rgba(0,196,106,0); } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } .flash { animation: none !important; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 14px; }
+  h1 { font-size: 22px; margin: 0 0 2px; letter-spacing: -.3px; }
+  .sub { color: var(--ink-dim); font-size: 14px; }
+  .clock { color: var(--ink-faint); font-size: 12.5px; margin-top: 10px; }
+  .state { display: inline-block; margin-top: 12px; padding: 5px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; }
+  .state.upcoming, .state.finished { background: var(--panel-hi); color: var(--ink-dim); }
+  .state.arriving { background: rgba(217,164,65,.16); color: var(--warn); }
+  .state.running { background: rgba(0,196,106,.15); color: var(--good); }
+  .state.exiting { background: rgba(255,59,31,.16); color: var(--accent); }
+  .big { font-size: 28px; font-weight: 800; letter-spacing: -.5px; margin: 14px 0 2px; }
+  .hint { color: var(--ink-dim); font-size: 14px; }
+  .guide { border-color: #244a73; background: rgba(77,163,255,.07); }
+  .wx .wxnow { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .wx .hint + .hint { margin-top: 6px; }
+  .wx .wxrep-h { margin-top: 14px; font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .6px; }
+  .wx .wxrep { display: block; margin-top: 8px; padding-left: 10px; border-left: 2px solid #9b6bff; color: var(--ink); text-decoration: none; font-size: 14px; line-height: 1.4; }
+  .wx .wxrep small { display: block; color: var(--ink-faint); font-size: 12px; margin-top: 2px; }
+  .guide .say { font-size: 17px; line-height: 1.45; font-weight: 600; }
+
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--ink-faint); margin: 0 0 12px; }
+  .bar { height: 10px; border-radius: 6px; background: var(--panel-hi); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 6px; transition: width .8s ease, background .8s; }
+  .barrow { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-dim); margin-top: 8px; }
+  .barrow b { color: var(--ink); }
+
+  .exit { text-align: center; border-color: var(--accent); }
+  .exit .name { font-size: 30px; font-weight: 800; margin: 6px 0 2px; }
+  .exit .why { color: var(--ink-dim); font-size: 14px; }
+
+  .gate { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+  .gate:first-of-type { border-top: none; padding-top: 0; }
+  .gate .nm { font-weight: 600; font-size: 14.5px; }
+  .gate .mt { color: var(--ink-faint); font-size: 12.5px; margin-top: 1px; }
+  .badge { border-radius: 7px; padding: 3px 10px; font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap; }
+  .badge.open { background: var(--good); } .badge.restricted { background: var(--warn); } .badge.closed { background: var(--accent); }
+  .badge.idle { background: var(--panel-hi); color: var(--ink-dim); border: 1px solid var(--line); }
+  .rank { color: var(--ink-faint); font-size: 13px; margin-right: 6px; }
+
+  .flash { animation: flash 1.6s ease-out 1; }
+  @keyframes flash { 0% { background: rgba(255,255,255,.16); } 100% { background: transparent; } }
+
+  .notice { font-size: 13.5px; color: var(--ink-dim); padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 14px; }
+  .notice.warn { border-color: var(--warn); color: var(--ink); }
+  .empty { color: var(--ink-dim); font-size: 14px; }
+  .sr { position: absolute; left: -9999px; }
+  .foot { color: var(--ink-faint); font-size: 12px; text-align: center; margin-top: 18px; }
+  .brand { display: inline-flex; align-items: center; gap: 9px; }
+  .brand .wm { font-weight: inherit; white-space: nowrap; }
+  .logo-mark { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 3px 10px rgba(255,59,31,.35)); }
+  .brand-sub { color: var(--ink-faint, #6A6A6A); font-weight: 500; font-size: 13px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <a class="brand" href="home.html"><img class="logo-mark" src="logo.svg" alt="" /><b class="wm">Event<span>Pulse</span></b></a>
+    <div class="live off" id="live"><span class="dot" aria-hidden="true"></span><span id="liveText">Connecting...</span></div>
+  </div>
+
+  <div id="notice" class="notice warn" hidden></div>
+  <div id="content"><div class="card"><div class="empty">Loading your event...</div></div></div>
+  <div class="sr" id="announce" aria-live="polite"></div>
+  <div class="foot">Updates automatically. Keep this page open.</div>
+</main>
+
+<script>
+"use strict";
+const API = location.port === "8080" ? "http://127.0.0.1:8000" : "";
+const params = new URLSearchParams(location.search);
+const token = params.get("token");
+const FIXED_HOUR = params.get("hour");          // pins the time (for testing); normally follows the live clock
+const POLL_MS = 3000;
+const STALE_AFTER = 2;                           // failed polls in a row before we say we're not live
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const clockLabel = (h) => `Day ${Math.floor(h / 24) + 1} · ${String(h % 24).padStart(2, "0")}:00`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+let prev = null, failures = 0, lastOk = 0, stopped = false;
+const guide = { text: "", key: "", at: 0, busy: false };
+
+function ramp(pct) { return pct >= 95 ? "var(--accent)" : pct >= 75 ? "var(--warn)" : "var(--good)"; }
+
+function meter(label, pct, right) {
+  const box = el("div");
+  const bar = el("div", "bar"), fill = el("i");
+  fill.style.width = `${Math.max(2, Math.min(100, pct))}%`; fill.style.background = ramp(pct);
+  bar.appendChild(fill);
+  const row = el("div", "barrow");
+  row.appendChild(el("span", null, label)); const b = el("b", null, right); row.appendChild(b);
+  box.appendChild(bar); box.appendChild(row);
+  return box;
+}
+
+function headline(d) {
+  switch (d.event_state) {
+    case "upcoming": return [`Starts in ${plural(d.hours_to_start, "hour")}`, "Gates open four hours before the start. We'll show the crowd here as it builds."];
+    case "arriving": return [`Gates are open — starts in ${plural(d.hours_to_start, "hour")}`, "People are arriving now. Check the gates below and use a quiet one."];
+    case "running": return ["Underway", d.hours_to_end > 0 ? `Ends in about ${plural(d.hours_to_end, "hour")}. Your best exit appears here as soon as it does.` : "It's about to end. Your best exit appears here in a moment."];
+    case "exiting": return [d.hours_since_end === 0 ? "Just ended — head out now" : `Ended ${plural(d.hours_since_end, "hour")} ago — head out now`, "Everyone is leaving at once. Use the gate below, not the one you came in by."];
+    default: return ["This event has finished", "Thanks for coming. This page stops updating in a while."];
+  }
+}
+
+const STATE_LABEL = { upcoming: "Not started", arriving: "Gates open", running: "Underway", exiting: "Exit now", finished: "Finished" };
+const LIVE_LABEL = { open: "Open", restricted: "Busy", closed: "Closed" };
+
+function render(d) {
+  const root = $("content");
+  root.textContent = "";
+
+  // -- event
+  const head = el("div", "card");
+  head.appendChild(el("h1", null, d.event_name));
+  head.appendChild(el("div", "sub", d.venue_name));
+  head.appendChild(el("span", `state ${d.event_state}`, STATE_LABEL[d.event_state]));
+  const [big, hint] = headline(d);
+  head.appendChild(el("div", "big", big));
+  head.appendChild(el("div", "hint", hint));
+  head.appendChild(el("div", "clock", `Event time: ${clockLabel(d.hour)}`));
+  root.appendChild(head);
+
+  // -- what to do right now, in a sentence (from /guidance; the last one stays up between updates)
+  if (guide.text) {
+    const g = el("div", "card guide");
+    g.appendChild(el("h2", null, "Right now"));
+    g.appendChild(el("div", "say", guide.text));
+    root.appendChild(g);
+  }
+
+  // -- weather at the venue, and what it means for getting out
+  const w = d.weather;
+  if (w && (w.advice.length || w.rain_mm_h >= 0.5 || (w.reports && w.reports.length))) {
+    const c = el("div", "card wx");
+    c.appendChild(el("h2", null, "Weather at the venue"));
+    c.appendChild(el("div", "wxnow", `${Math.round(w.temp_c)}° · ${w.condition}${w.rain_mm_h >= 0.5 ? ` · ${w.rain_mm_h} mm/h` : ""}`));
+    w.advice.forEach((a) => c.appendChild(el("div", "hint", a)));
+    if (w.reports && w.reports.length) {
+      c.appendChild(el("div", "wxrep-h", "What people are reporting"));
+      w.reports.forEach((r) => {
+        const a = el("div", "wxrep", r.text);
+        const age = r.age_h < 1 ? `${Math.max(1, Math.round(r.age_h * 60))} min` : `${Math.round(r.age_h)} h`;
+        a.appendChild(el("small", null, `${r.source} \u00B7 ${r.channel} \u00B7 ${age} ago${r.near_venue ? " \u00B7 near your venue" : ""}`));
+        c.appendChild(a);
+      });
+    }
+    root.appendChild(c);
+  }
+
+  // -- best exit (only once it ends)
+  if (d.event_state === "exiting" && d.best_exit) {
+    const b = d.best_exit, changed = prev && prev.best_exit && prev.best_exit.gate_id !== b.gate_id;
+    const c = el("div", "card exit" + (changed ? " flash" : ""));
+    c.appendChild(el("h2", null, "Your best exit right now"));
+    c.appendChild(el("div", "name", b.name));
+    c.appendChild(el("div", "why", b.reason));
+    const badge = el("span", `badge ${b.live_status}`, LIVE_LABEL[b.live_status] || b.live_status);
+    badge.style.display = "inline-block"; badge.style.marginTop = "12px";
+    c.appendChild(badge);
+    root.appendChild(c);
+  }
+
+  // -- crowd inside
+  if (d.inside) {
+    const c = el("div", "card");
+    c.appendChild(el("h2", null, "Inside the venue"));
+    c.appendChild(meter(`${d.inside.people.toLocaleString()} of ${d.inside.capacity.toLocaleString()} people`, d.inside.pct, `${d.inside.pct.toFixed(0)}% full`));
+    root.appendChild(c);
+  }
+
+  // -- gates
+  if (d.gates && d.gates.length) {
+    const c = el("div", "card");
+    c.appendChild(el("h2", null, "Gates, live"));
+    const prevById = new Map(((prev && prev.gates) || []).map((g) => [g.gate_id, g]));
+    // Once everyone is leaving, list the gates best-first so the numbers read 1, 2, 3...
+    const order = d.event_state === "exiting" ? d.all_exits.map((o) => o.gate_id) : null;
+    const gates = order
+      ? d.gates.slice().sort((a, b) => (order.indexOf(a.gate_id) + 1 || 99) - (order.indexOf(b.gate_id) + 1 || 99))
+      : d.gates;
+    gates.forEach((g) => {
+      const row = el("div", "gate");
+      const left = el("div");
+      const rank = d.event_state === "exiting" ? d.all_exits.findIndex((o) => o.gate_id === g.gate_id) : -1;
+      const nm = el("div", "nm");
+      if (rank >= 0) nm.appendChild(el("span", "rank", `${rank + 1}.`));
+      nm.appendChild(document.createTextNode(g.name));
+      left.appendChild(nm);
+      const flowing = g.phase && g.phase !== "idle";
+      left.appendChild(el("div", "mt", g.out_of_service ? "Out of service" : flowing ? `${g.phase === "ingress" ? "Arrivals" : "Exits"} at ${Math.round(Math.min(100, g.load_pct != null ? g.load_pct : g.load_ratio * 100))}% of capacity${g.redirect_to && g.redirect_to.length ? ` \u00B7 closed, use ${g.redirect_to.join(" or ")}` : ""}` : "Quiet"));
+      row.appendChild(left);
+
+      let cls, text;
+      if (g.out_of_service) { cls = "closed"; text = "Closed"; }
+      else if (!flowing) { cls = "idle"; text = "Quiet"; }
+      else { cls = g.live_status; text = LIVE_LABEL[g.live_status] || g.live_status; }
+      const badge = el("span", `badge ${cls}`, text);
+      row.appendChild(badge);
+
+      const was = prevById.get(g.gate_id);
+      if (was && (was.live_status !== g.live_status || was.phase !== g.phase)) row.classList.add("flash");
+      c.appendChild(row);
+    });
+    root.appendChild(c);
+  }
+
+  // -- screen-reader announcement when the guidance changes
+  if (prev && d.best_exit && (!prev.best_exit || prev.best_exit.gate_id !== d.best_exit.gate_id)) {
+    $("announce").textContent = `Your best exit is now ${d.best_exit.name}.`;
+  } else if (prev && prev.event_state !== d.event_state) {
+    $("announce").textContent = `${d.event_name}: ${STATE_LABEL[d.event_state]}.`;
+  }
+  document.title = `${STATE_LABEL[d.event_state]} · ${d.event_name} — EventPulse`;
+}
+
+function setLive(state, text) { const l = $("live"); l.className = `live ${state}`; $("liveText").textContent = text; }
+function showNotice(text) { const n = $("notice"); n.textContent = text || ""; n.hidden = !text; }
+
+function tickLabel() {
+  if (stopped || !lastOk) return;
+  const s = Math.round((Date.now() - lastOk) / 1000);
+  if (failures >= STALE_AFTER) setLive("stale", `Reconnecting... last update ${s}s ago`);
+  else setLive("", s < 2 ? "Live · just now" : `Live · updated ${s}s ago`);
+}
+
+// A short instruction for this moment. Asked for when the situation changes, and otherwise at most every
+// 20 seconds, so the 3-second live refresh does not turn into a message request each time.
+async function refreshGuide(d) {
+  const key = [d.event_state, d.best_exit ? d.best_exit.gate_id : ""].join("|");
+  if (guide.busy || (key === guide.key && Date.now() - guide.at < 20000)) return;
+  guide.busy = true;
+  try {
+    const res = await fetch(`${API}/status/${encodeURIComponent(token)}/guidance` + (FIXED_HOUR ? `?hour=${encodeURIComponent(FIXED_HOUR)}` : ""));
+    if (res.ok) {
+      const g = await res.json();
+      const changed = g.text !== guide.text;
+      guide.text = g.text; guide.key = key; guide.at = Date.now();
+      if (changed && prev) render(prev);
+    }
+  } catch (e) { /* the page works without it */ }
+  guide.busy = false;
+}
+
+async function poll() {
+  if (stopped) return;
+  const url = `${API}/status/${encodeURIComponent(token)}` + (FIXED_HOUR ? `?hour=${encodeURIComponent(FIXED_HOUR)}` : "");
+  try {
+    const res = await fetch(url);
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* not JSON */ }
+
+    if (res.status === 404 && data && data.detail) {
+      stopped = true; setLive("off", "Not live");
+      $("content").textContent = "";
+      const c = el("div", "card"); c.appendChild(el("div", "empty", `${data.detail}. Check the link in your email.`));
+      $("content").appendChild(c); showNotice(""); return;
+    }
+    if (!res.ok || !data) throw new Error(`status ${res.status}`);
+
+    failures = 0; lastOk = Date.now(); showNotice("");
+    render(data); prev = data; tickLabel();
+    refreshGuide(data);
+  } catch (e) {
+    failures += 1;
+    if (!lastOk) {
+      setLive("off", "Not connected");
+      showNotice("Can't reach the live service right now. Retrying...");
+    } else if (failures >= STALE_AFTER) {
+      showNotice("Lost connection. Showing the last update; retrying...");
+    }
+    tickLabel();
+  }
+}
+
+if (!token) {
+  stopped = true; setLive("off", "Not live");
+  $("content").textContent = "";
+  const c = el("div", "card"); c.appendChild(el("div", "empty", "This page needs the link from your registration email."));
+  $("content").appendChild(c);
+} else {
+  poll();
+  setInterval(poll, POLL_MS);
+  setInterval(tickLabel, 1000);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,3018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EventPulse: Orchestration Engine</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:        #0A0A0A;
+    --panel:     #101010;
+    --panel-hi:  #171717;
+    --line:      #242424;
+    --ink:       #F2F2F2;
+    --ink-dim:   #8C8C8C;
+    --ink-faint: #5A5A5A;
+
+    /* Signal palette. Orange is the house accent and doubles as the
+       at-capacity state, so the most urgent thing on screen is also the most
+       brand-coloured. */
+    --accent:    #FF3B1F;
+    --good:      #00C46A;
+    --warn:      #E8A33D;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Barlow", system-ui, sans-serif;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- shared type ---------- */
+  .eyebrow {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .eyebrow.dim { color: var(--ink-faint); }
+
+  h2.display, h3.display {
+    font-family: "Archivo", sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  h2.display { font-size: 26px; }
+  h3.display { font-size: 19px; }
+
+  .num {
+    font-family: "Archivo", sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  /* ---------- masthead ---------- */
+  .mast {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    padding: 14px 26px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  .brand { display: flex; align-items: center; gap: 11px; }
+
+  .mark { width: 40px; height: 40px; display: block; filter: drop-shadow(0 4px 14px rgba(255,59,31,.35)); }
+
+  .brand .name {
+    font-family: "Archivo", sans-serif;
+    font-weight: 900;
+    font-size: 17px;
+    letter-spacing: .04em;
+    line-height: 1;
+  }
+
+  .brand .sub {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 11px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-top: 3px;
+  }
+
+  nav { display: flex; gap: 2px; margin-left: 14px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+
+  nav button {
+    background: none;
+    border: none;
+    color: var(--ink-faint);
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 8px 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex: none;
+  }
+
+  nav button.on { color: var(--ink); border-bottom: 2px solid var(--accent); }
+  nav button:focus-visible { outline: 2px solid var(--ink-dim); outline-offset: -2px; }
+
+  .mast .right { margin-left: auto; display: flex; align-items: center; gap: 22px; }
+
+  .clock { text-align: right; }
+
+  .clock .lab {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 11px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .scrub { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .scrub input { width: 150px; accent-color: var(--accent); }
+  .scrub .hour { font-family: "Archivo", sans-serif; font-variant-numeric: tabular-nums;
+                 font-weight: 700; font-size: 17px; min-width: 92px; text-align: right; }
+
+  .play {
+    background: var(--panel-hi);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    width: 26px; height: 26px;
+    padding: 0; cursor: pointer;
+    font-size: 10px; line-height: 1;
+    display: grid; place-items: center;
+  }
+
+  .play:focus-visible { outline: 2px solid var(--ink-dim); outline-offset: 1px; }
+
+  .beat {
+    display: flex; align-items: center; gap: 7px;
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-top: 5px; justify-content: flex-end;
+  }
+
+  .beat i { width: 6px; height: 6px; background: var(--ink-faint); display: inline-block; }
+  .beat.pulsing i { background: var(--accent); animation: beat 2s steps(1) infinite; }
+  @keyframes beat { 0%,60% { opacity: 1; } 61%,100% { opacity: .25; } }
+
+  /* ---------- KPI strip ---------- */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  .kpi { padding: 20px 26px; border-right: 1px solid var(--line); }
+  .kpi:last-child { border-right: none; }
+
+  .kpi .v { font-size: 40px; line-height: 1; }
+  .kpi .v.accent { color: var(--accent); }
+  .kpi .v.good   { color: var(--good); }
+  .kpi .v.warn   { color: var(--warn); }
+  .kpi .v small  { font-size: 20px; color: var(--ink-faint); font-weight: 700; }
+
+  /* Masthead and KPIs travel together, so the live numbers stay in view while
+     you work down the page. Only where there is room for it. */
+  .topbar { background: var(--bg); }
+  @media (min-width: 901px) {
+    .topbar { position: sticky; top: 0; z-index: 40; box-shadow: 0 8px 22px rgba(0,0,0,.45); }
+    .topbar .mast { padding: 8px 26px; }
+    .topbar .kpi { padding: 8px 18px 7px; }
+    .topbar .kpi .v { font-size: 26px; }
+    .topbar .kpi .v small { font-size: 14px; }
+    .topbar .kpi .k { margin-top: 4px; font-size: 10.5px; }
+    .topbar .kpi .delta { margin-top: 2px; font-size: 12px; min-height: 14px; }
+  }
+  .kpi .delta { font-family: "Barlow Condensed", sans-serif; font-size: 12.5px; letter-spacing: .06em;
+                margin-top: 4px; color: var(--ink-faint); min-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi .delta.good { color: var(--good); }
+  .kpi .delta.bad  { color: var(--accent); }
+  .kpi .k {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 11.5px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-top: 8px;
+  }
+
+  /* ---------- layout ---------- */
+  .body { display: grid; grid-template-columns: 1fr 380px; }
+
+  @media (max-width: 1080px) {
+    .body { grid-template-columns: 1fr; }
+    .rail { border-left: none; border-top: 1px solid var(--line); }
+    .duo { grid-template-columns: 1fr !important; }
+  }
+
+  .stage {
+    padding: 24px 26px 48px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The rail grows with the alert count, so the columns cannot be matched by a
+     fixed height. The last card takes the slack instead, which keeps the two
+     columns ending together without leaving bare background beneath it. */
+  .stage > .card:last-child { flex: 1; }
+
+  .rail {
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+    padding: 24px 22px 48px;
+    min-width: 0;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    margin-bottom: 22px;
+  }
+
+  .card-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 14px; padding: 15px 18px 0;
+  }
+
+  .card-head .meta {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .duo .card { margin-bottom: 0; }
+
+  /* ---------- zone absorption grid ---------- */
+  .grid-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 16px 18px 8px;
+  }
+
+  .tile {
+    background: var(--panel-hi);
+    border: 1px solid transparent;
+    padding: 13px 12px 11px;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .tile:focus-visible { outline: 2px solid var(--ink-dim); outline-offset: -2px; }
+  .tile.sel { border-color: var(--ink); }
+
+  /* Tiles carry the same risk band as the map and the chart, so one zone reads
+     the same wherever it appears. The whole tile shifts, not just the reading,
+     so a filling zone is visible when scanning the grid rather than only when
+     reading it. */
+  /* Every band fills its tile, so the grid reads as three solid states at a
+     glance: green has room, amber is filling, orange is full. */
+  .tile.band-ok { background: var(--good); }
+  .tile.band-ok .id,
+  .tile.band-ok .pct,
+  .tile.band-ok .delta { color: #0A0A0A; }
+  .tile.band-ok .zname { color: rgba(10,10,10,.7); }
+
+  .tile.band-warn { background: var(--warn); }
+  .tile.band-warn .id,
+  .tile.band-warn .pct,
+  .tile.band-warn .delta { color: #0A0A0A; }
+  .tile.band-warn .zname { color: rgba(10,10,10,.7); }
+
+  /* Emptiest zone. Now that all calm tiles are green, the highlight has to be
+     something other than colour, so it takes an outline and a marker. */
+  .tile.best { background: var(--good); box-shadow: inset 0 0 0 2px #0A0A0A; }
+  .tile.best .id, .tile.best .pct, .tile.best .delta { color: #0A0A0A; }
+  /* No label: the tile is too narrow to take one without wrapping, and the
+     inset border already sets it apart from the other green tiles. The title
+     attribute carries the bed count for anyone who hovers. */
+  .tile.hot { background: var(--accent); }
+  .tile.hot .id, .tile.hot .pct, .tile.hot .delta { color: #0A0A0A; }
+
+  .tile .id {
+    font-family: "Archivo", sans-serif;
+    font-weight: 800; font-size: 13px; letter-spacing: .06em;
+    color: var(--ink-dim);
+  }
+
+  .tile .pct {
+    font-family: "Archivo", sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700; font-size: 13px; float: right;
+    color: var(--ink);
+  }
+
+  .tile .delta {
+    font-family: "Barlow Condensed", sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px; color: var(--ink-faint);
+    margin-top: 7px; clear: both;
+  }
+
+  .tile .zname {
+    font-size: 11px; color: var(--ink-faint);
+    margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .tile.best .zname, .tile.hot .zname { color: rgba(10,10,10,.7); }
+
+  .propagation { padding: 6px 18px 16px; }
+  .propagation p { font-size: 13px; color: var(--ink-dim); margin: 6px 0 0; line-height: 1.45; }
+
+  .nugen-badge { display: inline-flex; align-items: center; gap: 7px; font-family: "Barlow Condensed", sans-serif; font-size: 12px;
+    font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim); text-decoration: none;
+    border: 1px solid var(--line); padding: 5px 10px; white-space: nowrap; }
+  .nugen-badge i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); }
+  .nugen-badge.ok { color: #c9b3ff; border-color: #4b3a78; } .nugen-badge.ok i { background: #9b6bff; box-shadow: 0 0 0 3px rgba(155,107,255,.22); }
+  .nugen-badge:hover { border-color: var(--ink-faint); }
+  @media (max-width: 1180px) { .nugen-badge { display: none; } }
+  /* ---------- weather twin ---------- */
+  .wx-body { padding: 10px 18px 18px; }
+  .wx-top { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 760px) { .wx-top { grid-template-columns: 1fr; } }
+  .wx-now { background: var(--panel-hi); padding: 12px 14px; }
+  .wx-t { margin-top: 6px; font-size: 15px; } .wx-t b { font-family: "Archivo", sans-serif; font-size: 30px; font-weight: 800; margin-right: 6px; }
+  .wx-sub { color: var(--ink-dim); font-size: 13px; line-height: 1.45; margin-top: 4px; }
+  .wx-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .wx-chips span { font-size: 12px; font-weight: 600; padding: 3px 9px; background: #222; color: var(--ink-faint); }
+  .wx-chips span.on { background: rgba(77,163,255,.16); color: #8fc4ff; }
+  .wx-latest { display: block; margin-top: 8px; color: var(--ink-dim); font-size: 12.5px; line-height: 1.4; text-decoration: none; }
+
+  .wx-fx { margin-top: 6px; }
+  .wx-ord { font-family: "Barlow Condensed", sans-serif; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin: 10px 0 4px; }
+  .wx-e { padding: 7px 10px; margin: 4px 0; background: var(--panel-hi); border-left: 3px solid; font-size: 13.5px; line-height: 1.4; }
+  .wx-e.o1 { border-left-color: #4DA3FF; } .wx-e.o2 { border-left-color: var(--warn); } .wx-e.o3 { border-left-color: var(--accent); }
+  .wx-e.sum { background: none; color: var(--ink-faint); border-left-color: transparent; }
+  .wx-quick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .wx-quick button { background: var(--panel-hi); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; font: 600 13px "Archivo", sans-serif; cursor: pointer; }
+  .wx-quick button.on { border-color: #4DA3FF; color: #8fc4ff; }
+  .wx-quick button:disabled { opacity: .6; cursor: wait; }
+  .wx-sim { margin-top: 12px; }
+  .wx-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 8px; }
+  @media (max-width: 900px) { .wx-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .wx-kpis div { background: var(--panel-hi); padding: 10px 12px; }
+  .wx-kpis small { display: block; color: var(--ink-faint); font-size: 11.5px; }
+  .wx-kpis b { display: block; font-family: "Archivo", sans-serif; font-size: 22px; font-weight: 800; margin: 2px 0; }
+  .wx-range { color: var(--ink-faint); font-size: 11.5px; }
+  .plan-box { margin-top: 14px; border: 1px solid #2c4f78; background: rgba(77,163,255,.05); padding: 12px 14px; }
+  .plan-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .plan-src { font-size: 11.5px; font-weight: 700; padding: 3px 8px; background: #222; color: var(--ink-dim); }
+  .plan-src.nugen { background: rgba(155,107,255,.18); color: #c9b3ff; }
+  .plan-box ol { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.5; }
+  .plan-box li { margin: 4px 0; }
+  .plan-msg { margin-top: 8px; color: var(--ink-dim); font-size: 13px; font-style: italic; }
+  /* ---------- social pulse ---------- */
+  .soc-body { padding: 10px 18px 18px; }
+  .soc-sub { color: var(--ink-dim); font-size: 13px; line-height: 1.45; margin-top: 6px; }
+  .soc-emerge { margin: 8px 0; padding: 10px 12px; border-left: 3px solid var(--accent); background: rgba(255,59,31,.07); display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+  .soc-emerge span { color: var(--ink-dim); } .soc-emerge q { color: var(--ink-dim); font-style: italic; }
+  .soc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 16px 0 14px; }
+  @media (max-width: 760px) { .soc-grid { grid-template-columns: 1fr; } }
+  .soc-trend { display: grid; grid-template-columns: 84px 90px 80px 1fr; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+  .soc-trend .dir { font-size: 12px; color: var(--ink-faint); } .soc-trend .dir.rising { color: var(--accent); } .soc-trend .dir.falling { color: var(--good); }
+  .soc-trend .c { color: var(--ink-faint); font-size: 12px; }
+  .soc-spark { display: flex; align-items: flex-end; gap: 2px; height: 20px; }
+  .soc-spark i { flex: 1; background: #4DA3FF; min-height: 2px; }
+  .soc-mood { display: flex; height: 26px; margin-top: 8px; font-size: 11.5px; font-weight: 700; overflow: hidden; }
+  .soc-mood i { font-style: normal; display: flex; align-items: center; padding: 0 8px; white-space: nowrap; overflow: hidden; color: #0A0A0A; }
+  .soc-mood i.frustrated { background: #FF7A5C; } .soc-mood i.worried { background: var(--warn); } .soc-mood i.relieved { background: var(--good); } .soc-mood i.reporting { background: #5a5a5a; color: #eee; }
+  .soc-topics { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .soc-topics span { font-size: 12px; padding: 2px 8px; background: #222; color: var(--ink-dim); }
+  .soc-filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
+  .soc-filters button { background: var(--panel-hi); border: 1px solid var(--line); color: var(--ink-dim); padding: 5px 11px; font: 600 12.5px "Archivo", sans-serif; cursor: pointer; }
+  .soc-filters button.on { color: var(--ink); border-color: #4DA3FF; }
+  .soc-item { display: block; padding: 10px 12px; margin: 6px 0; background: var(--panel-hi); border-left: 3px solid #3a3a3a; text-decoration: none; color: var(--ink); }
+  .soc-item.traveller { border-left-color: #9b6bff; }
+  .soc-item .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-faint); }
+  .soc-item .src { font-weight: 700; padding: 1px 6px; background: #2a2a2a; color: var(--ink); }
+  .soc-item .src.reddit { background: #ff4500; color: #fff; } .soc-item .src.mastodon { background: #6364ff; color: #fff; }
+  .soc-item .mood { font-weight: 700; } .soc-item .mood.frustrated { color: #FF7A5C; } .soc-item .mood.worried { color: var(--warn); } .soc-item .mood.relieved { color: var(--good); }
+  .soc-item .t { font-size: 13.5px; line-height: 1.45; margin-top: 5px; }
+  .soc-item .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .soc-item .tags span { font-size: 11px; padding: 1px 6px; background: rgba(77,163,255,.14); color: #8fc4ff; }
+  .soc-item .tags span.topic { background: #262626; color: var(--ink-dim); } .soc-item .tags span.place { background: rgba(155,107,255,.16); color: #c9b3ff; }
+  .soc-more { margin-top: 6px; background: none; border: 1px solid var(--line); color: var(--ink); padding: 7px 14px; font: 600 12.5px "Archivo", sans-serif; cursor: pointer; }
+  /* ---------- exits ---------- */
+  .exit-opt { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px;
+    background: var(--panel-2, rgba(255,255,255,0.03)); border: 1px solid transparent; }
+  .exit-opt.best { border-color: var(--good); background: rgba(0,196,106,.07); }
+  .exit-name { font-weight: 600; font-size: 13.5px; } .exit-why { color: var(--ink-dim); font-size: 13px; margin-top: 2px; }
+  .exit-status { font-size: 12px; font-weight: 700; }
+  /* ---------- gates ---------- */
+  .gate-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .gate-row { padding: 8px 10px; background: var(--panel-2, rgba(255,255,255,0.03)); }
+  .gate-top { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .gate-top b { flex: 1; font-weight: 600; }
+  .gate-pct { font-family: "Archivo", sans-serif; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .gate-badge { padding: 3px 9px; font-size: 11.5px; font-weight: 700; color: #fff; }
+  .gate-bar { position: relative; height: 6px; background: #1d1d1d; margin: 7px 0 5px; }
+  .gate-bar i { position: absolute; left: 0; top: 0; bottom: 0; transition: width .6s ease, background .6s ease; }
+  .gate-bar em { position: absolute; top: -2px; bottom: -2px; width: 1px; background: rgba(255,255,255,.35); }
+  .gate-redirect { margin-top: 5px; font-size: 12.5px; padding: 4px 8px; }
+  .gate-redirect.out { color: #ffb4a6; background: rgba(255,59,31,.1); border-left: 2px solid var(--accent); }
+  .gate-redirect.in { color: #9fe0bf; background: rgba(0,196,106,.08); border-left: 2px solid var(--good); }
+  .gate-held { margin-top: 8px; padding: 8px 10px; font-size: 13px; color: #ffb4a6; background: rgba(255,59,31,.1); border-left: 3px solid var(--accent); }
+  .fd-redir { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+  .fd-redir path { stroke-dasharray: 5 4; animation: fdflow .9s linear infinite; opacity: .9; }
+  .fd-redir-lbl { position: absolute; transform: translate(-50%, -50%); z-index: 5; pointer-events: none; white-space: nowrap;
+    background: rgba(40,8,4,.92); border: 1px solid #FF3B1F; color: #ffd2c9; font: 700 11px "Archivo", sans-serif; padding: 2px 7px; }
+  .fd-gpct { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); font: 800 10.5px "Archivo", sans-serif;
+    background: rgba(10,10,10,.85); padding: 0 4px; white-space: nowrap; }
+  .fd-keys i.redir-key { background: repeating-linear-gradient(90deg, #FF3B1F 0 4px, transparent 4px 7px); width: 16px; height: 3px; vertical-align: 2px; }
+  /* ---------- floor density ---------- */
+  .fd { margin-top: 18px; }
+  .fd-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .fd-sum { font-size: 13px; color: var(--ink-dim); }
+  .fd-sum b { color: var(--ink); font-family: "Archivo", sans-serif; font-size: 16px; }
+  .fd-phase { font-weight: 700; } .fd-phase.ingress { color: #4DA3FF; } .fd-phase.egress { color: var(--warn); }
+  .fd-layout { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 16px; align-items: start; }
+  @media (max-width: 760px) { .fd-layout { grid-template-columns: 1fr; } }
+  .fd-floor { position: relative; width: 100%; border: 1px solid var(--line); background: #0c0c0c; overflow: hidden;
+    background-image: radial-gradient(ellipse at 50% 55%, #141414 0%, #0b0b0b 70%); }
+  .fd-site, .fd-flow, .fd-plan { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .fd-plan { object-fit: fill; opacity: .32; filter: grayscale(1) contrast(1.1); pointer-events: none; }
+  .fd-heat { position: absolute; transform: translate(-50%, -50%); aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+    mix-blend-mode: screen; filter: blur(2px); transition: background .8s ease; }
+  .fd-flow line { stroke-linecap: round; }
+  .fd-flow line.moving { stroke-dasharray: 6 7; animation: fdflow 1.1s linear infinite; }
+  @keyframes fdflow { to { stroke-dashoffset: -13; } }
+  .fd-zone { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 1px;
+    border: 1.5px solid; color: var(--ink); font: inherit; cursor: default; padding: 6px 10px; border-radius: 10px; background: rgba(10,10,10,.82);
+    backdrop-filter: blur(2px); transition: transform .15s ease, box-shadow .15s ease; z-index: 2; line-height: 1.2; }
+  .fd-zone.bowl { border-radius: 50%; width: 30%; aspect-ratio: 1.35; justify-content: center; border-style: dashed; background: rgba(10,10,10,.55); }
+  .fd-zone.on, .fd-zone:focus-visible { transform: translate(-50%, -50%) scale(1.06); box-shadow: 0 0 0 3px rgba(255,255,255,.15); outline: none; z-index: 3; }
+  .fd-zone .nm { font-family: "Barlow Condensed", sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-dim); white-space: nowrap; }
+  .fd-zone .pc { font-family: "Archivo", sans-serif; font-weight: 800; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .fd-zone.bowl .pc { font-size: 26px; }
+  .fd-zone .pp { font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .fd-gate { position: absolute; transform: translate(-50%, -50%); width: 20px; height: 20px; display: grid; place-items: center;
+    font: 800 11px "Archivo", sans-serif; color: #0A0A0A; border: 2px solid #0A0A0A; box-shadow: 0 0 0 1px rgba(255,255,255,.5); z-index: 4; cursor: default; }
+  .fd-gate.oos { color: #ddd; }
+  .fd-list { display: flex; flex-direction: column; gap: 4px; }
+  .fd-row { padding: 8px 10px; border: 1px solid transparent; transition: background .15s; }
+  .fd-row.on { background: var(--panel-hi); border-color: var(--line); }
+  .fd-row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .fd-row-top b { font-family: "Archivo", sans-serif; font-variant-numeric: tabular-nums; }
+  .fd-bar { height: 4px; background: #1d1d1d; margin: 6px 0 4px; }
+  .fd-bar i { display: block; height: 100%; transition: width .6s ease; }
+  .fd-guide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+  .fd-guide line { stroke-dasharray: 2 6; animation: fdflow .7s linear infinite; }
+  .fd-guide-head { position: absolute; z-index: 4; width: 0; height: 0; border-top: 9px solid transparent; border-bottom: 9px solid transparent;
+    border-left: 16px solid #4DA3FF; pointer-events: none; filter: drop-shadow(0 0 4px rgba(77,163,255,.7)); }
+  .fd-guide-lbl { position: absolute; transform: translate(-50%, -140%); z-index: 6; pointer-events: none; white-space: nowrap;
+    background: rgba(6,24,46,.94); border: 1px solid #4DA3FF; color: #cfe6ff; font: 700 11px "Archivo", sans-serif; padding: 2px 7px; }
+  .fd-keys i.guide-key { background: #4DA3FF; width: 16px; height: 3px; vertical-align: 2px; }
+  .fd-row-go { margin-top: 4px; font-size: 11.5px; color: #8fc4ff; }
+  .fd-row-sub { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .fd-legend { margin-top: 10px; padding: 10px 10px 0; border-top: 1px solid var(--line); }
+  .fd-scale { height: 6px; background: linear-gradient(90deg, rgb(0,196,106), rgb(232,163,61), rgb(255,59,31)); }
+  .fd-scale-l { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-faint); margin-top: 4px; }
+  .fd-keys { display: flex; gap: 12px; margin-top: 10px; font-size: 11.5px; color: var(--ink-dim); flex-wrap: wrap; }
+  .fd-keys i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; vertical-align: 0; }
+  @media (max-width: 600px) {
+    .fd-floor.schem { aspect-ratio: 1 / 1 !important; }   /* the drawn floor is ours to reshape; an uploaded plan keeps its own */
+    .fd-zone .pp, .fd-zone .nm { display: none; }
+    .fd-zone { padding: 3px 7px; } .fd-zone .pc { font-size: 14px; } .fd-zone.bowl .pc { font-size: 19px; }
+  }
+  /* ---------- stays ---------- */
+  .rating { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink-dim); }
+  .zone-line {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .sect { margin-bottom: 26px; }
+  .sect + .sect { border-top: 1px solid var(--line); padding-top: 22px; }
+  .sect .lead { color: var(--ink-faint); font-size: 13px; margin: 3px 0 14px; }
+
+  .alert { background: var(--panel-hi); border: 1px solid var(--line); padding: 12px 14px; margin-bottom: 9px; cursor: pointer; }
+  .alert:focus-visible { outline: 2px solid var(--ink-dim); outline-offset: -2px; }
+  .alert.fresh { background: #222; border-color: var(--ink-faint); }
+  .alert .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .alert .who { font-family: "Barlow Condensed", sans-serif; font-size: 16px; font-weight: 600; }
+  .alert .pct { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 500; }
+  .alert.critical .pct { color: var(--accent); }
+  .alert.warning  .pct { color: var(--warn); }
+  .alert .msg { font-size: 13.5px; color: var(--ink-dim); line-height: 1.42; }
+
+  .sev { display: inline-block; width: 9px; height: 9px; margin-right: 8px; vertical-align: 1px; }
+  .sev.critical { background: var(--accent); }
+  .sev.warning  { background: var(--warn); }
+
+  .opt { background: var(--panel-hi); padding: 12px 14px; margin-bottom: 9px; }
+
+  /* In the main column there is room to lay the options out side by side. */
+  .opts-wide {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 10px;
+    padding: 4px 18px 18px;
+  }
+  .opts-wide .opt { margin-bottom: 0; }
+
+  @media (max-width: 720px) { .opts-wide { grid-template-columns: 1fr; } }
+  .opt .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .opt .nm { font-family: "Barlow Condensed", sans-serif; font-size: 16px; font-weight: 600; }
+  .opt .sc { font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 500; }
+  .opt .why { font-size: 13px; color: var(--ink-dim); line-height: 1.42; margin-bottom: 9px; }
+
+  .bars { display: flex; flex-direction: column; gap: 4px; }
+  .bar { display: grid; grid-template-columns: 62px 1fr 34px; align-items: center; gap: 8px;
+         font-size: 11.5px; color: var(--ink-faint); }
+  .bar .t { height: 4px; background: #0A0A0A; overflow: hidden; }
+  .bar .f { height: 100%; background: var(--good); opacity: .8; }
+  .bar .v { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .sim-ctl { margin-bottom: 14px; }
+  .sim-ctl .row { display: flex; align-items: baseline; justify-content: space-between;
+                  font-size: 13px; color: var(--ink-dim); margin-bottom: 6px; }
+  .sim-ctl .amt { font-family: "Archivo", sans-serif; font-variant-numeric: tabular-nums;
+                  font-size: 18px; font-weight: 700; color: var(--ink); }
+  .sim-ctl input { width: 100%; accent-color: var(--accent); }
+
+  .outcome { background: var(--panel-hi); padding: 13px 14px; margin-bottom: 10px; }
+  .outcome .shift { display: flex; align-items: baseline; gap: 9px;
+                    font-family: "Archivo", sans-serif; font-variant-numeric: tabular-nums;
+                    font-size: 23px; font-weight: 700; margin-bottom: 3px; }
+  .outcome .arrow { color: var(--ink-faint); font-size: 15px; font-weight: 400; }
+  .outcome .note { font-size: 13px; color: var(--ink-dim); line-height: 1.45; }
+
+  .verdict { padding: 10px 14px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.45; }
+  .verdict.clears  { background: rgba(0,196,106,.12); border: 1px solid var(--good); }
+  .verdict.partial { background: rgba(232,163,61,.10); border: 1px solid var(--warn); }
+
+  .landing { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: baseline;
+             font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--line);
+             font-variant-numeric: tabular-nums; }
+  .landing:last-child { border-bottom: none; }
+  .landing .n { color: var(--good); font-weight: 500; }
+  .landing .pc { color: var(--ink-faint); }
+
+  .entry { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .entry:last-child { border-bottom: none; }
+  .entry .head { font-family: "Barlow Condensed", sans-serif; font-size: 14.5px; font-weight: 600; }
+  .entry .when { font-size: 12px; color: var(--ink-faint); margin-left: 7px; font-weight: 400; }
+  .entry .detail { display: block; font-size: 12.5px; color: var(--ink-dim); margin-top: 2px; line-height: 1.4; }
+  .entry .metric { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--good); margin-top: 4px; }
+  .entry .metric.warn { color: var(--warn); }
+
+  /* Next up */
+  .ev { padding: 11px 0; border-bottom: 1px solid var(--line); }
+  .ev:last-child { border-bottom: none; }
+  .ev .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .ev .nm { font-family: "Barlow Condensed", sans-serif; font-size: 15.5px; font-weight: 600; }
+  .ev .cd {
+    font-family: "Archivo", sans-serif; font-variant-numeric: tabular-nums;
+    font-size: 15px; font-weight: 700; white-space: nowrap;
+  }
+  .ev .cd.now { color: var(--accent); }
+  .ev .cd.soon { color: var(--warn); }
+  .ev .cd.later { color: var(--ink-faint); }
+  .ev .row2 { font-size: 12.5px; color: var(--ink-dim); margin-top: 3px; }
+
+  /* Transport load */
+  .link-row { padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .link-row:last-child { border-bottom: none; }
+  .link-row .r1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .link-row .rt { font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 600; }
+  .link-row .lv { font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 500; }
+  .link-row .track { height: 5px; background: #0A0A0A; margin-top: 6px; overflow: hidden; }
+  .link-row .fillbar { height: 100%; }
+  .link-row .cap { font-size: 12px; color: var(--ink-faint); margin-top: 4px;
+                   font-variant-numeric: tabular-nums; }
+
+  /* Reroute advice, shown under the link it relieves. */
+  .alt {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    margin-top: 7px;
+    padding-left: 10px;
+    border-left: 2px solid var(--line);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    line-height: 1.4;
+  }
+
+  .alt.relief { border-left-color: var(--good); }
+  .alt .go { color: var(--good); }
+  .alt .cost { color: var(--ink-faint); }
+
+  /* Venue capacity */
+  .vrow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+
+  .vname {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .vsub {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 11.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .vfig {
+    font-family: "Archivo", sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    font-size: 19px;
+  }
+
+  /* Seats bar. The overflow segment sits past the capacity line, which is the
+     whole point: it is the part of the crowd the building cannot hold. */
+  .seats {
+    position: relative;
+    height: 22px;
+    background: #0A0A0A;
+    margin: 10px 0 6px;
+    display: flex;
+  }
+
+  .seats .in { background: var(--good); }
+  .seats .over { background: var(--accent); }
+  .seats .capline {
+    position: absolute;
+    top: -3px; bottom: -3px;
+    width: 2px;
+    background: var(--ink);
+  }
+
+  .vstats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  .vstat .k {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+  }
+
+  .vstat .v {
+    font-family: "Archivo", sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    font-size: 21px;
+  }
+
+  .vstat .v.crit { color: var(--accent); }
+  .vstat .v.warn { color: var(--warn); }
+  .vstat .v.good { color: var(--good); }
+  .vstat .note { font-size: 12px; color: var(--ink-dim); margin-top: 3px; }
+
+  /* Queue profile: one bar per hour through the gates. */
+  .queue { display: flex; align-items: flex-end; gap: 4px; height: 64px; margin-top: 6px; }
+  .queue .q { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+  .queue .qbar { width: 100%; background: #303030; }
+  .queue .qbar.waiting { background: var(--warn); }
+  .queue .qbar.stuck { background: var(--accent); }
+  .queue .qlab {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: 10px;
+    color: var(--ink-faint);
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  .sc-row { display: grid; grid-template-columns: 1fr 62px 62px; gap: 8px; padding: 7px 0;
+            border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .sc-row:last-child { border-bottom: none; }
+  .sc-row.head { color: var(--ink-faint); font-size: 12px; border-bottom-color: transparent; }
+  .sc-row .n { font-variant-numeric: tabular-nums; text-align: right; }
+  .sc-row.win { color: var(--good); font-weight: 500; }
+
+  .empty { color: var(--ink-faint); font-size: 14px; padding: 16px 0; line-height: 1.5; }
+
+  /* Section jumps land below the sticky masthead + KPI bar rather than under it. */
+  .navsec { scroll-margin-top: 12px; }
+  @media (min-width: 901px) { .navsec { scroll-margin-top: 175px; } }
+  .stays-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .stays-head .lead { color: var(--ink-dim); font-size: 14px; margin-top: 6px; max-width: 620px; }
+  .stays-locate { display: inline-flex; align-items: center; gap: 9px; background: var(--panel-hi); color: var(--ink); border: 1px solid var(--line);
+    padding: 10px 16px; font: 600 13px "Archivo", sans-serif; cursor: pointer; }
+  .stays-locate:hover { border-color: var(--ink-faint); }
+  .youdot { width: 10px; height: 10px; border-radius: 50%; background: #4DA3FF; box-shadow: 0 0 0 4px rgba(77,163,255,.22); flex: none; }
+  .stays-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1000px) { .stays-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .stays-grid { grid-template-columns: 1fr; } }
+  .stay-card { background: var(--panel); border: 1px solid var(--line); padding: 18px 20px 16px; display: flex; flex-direction: column; }
+  .stay-card.first { border-color: #2f5f93; box-shadow: inset 0 3px 0 #4DA3FF; }
+  .stay-card h4 { font-family: "Archivo", sans-serif; font-weight: 800; font-size: 19px; letter-spacing: -0.01em; margin: 12px 0 4px; }
+  .stay-top { display: flex; justify-content: space-between; align-items: center; }
+  .stay-rank { font-family: "Barlow Condensed", sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+  .stay-card.first .stay-rank { color: #4DA3FF; }
+  .stay-dist { margin: 16px 0 14px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .stay-dist b { font-family: "Archivo", sans-serif; font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stay-dist span { color: var(--ink-dim); font-size: 13px; }
+  .stay-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline;
+    gap: 10px; font-size: 13px; color: var(--ink-dim); }
+  .stay-foot .price { color: var(--ink); font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .stay-foot .price small { color: var(--ink-faint); font-weight: 500; font-size: 12px; }
+  .stays-more { display: block; margin: 14px auto 0; background: none; border: 1px solid var(--line); color: var(--ink); padding: 10px 18px; font: 600 13px "Archivo", sans-serif; cursor: pointer; }
+  .stays-more:hover { border-color: var(--ink-faint); }
+  .twin-frame { display: block; width: 100%; height: 600px; border: 0; background: #0A0A0A; }
+  @media (max-width: 720px) { .twin-frame { height: 440px; } }
+
+  /* ---------- map internals ---------- */
+  .map { background: #0A0A0A; }
+  .map svg { display: block; width: 100%; height: auto; }
+  .map .node { cursor: pointer; }
+  .map .label { font-family: "Barlow Condensed", sans-serif; font-size: 11.5px; fill: var(--ink-dim);
+                pointer-events: none; paint-order: stroke; stroke: #0A0A0A; stroke-width: 3px;
+                stroke-linejoin: round; }
+  .map .label.strong { fill: var(--ink); }
+  .map .pctlabel { font-family: "Archivo", sans-serif; font-size: 13px; font-weight: 700;
+                   font-variant-numeric: tabular-nums; pointer-events: none; paint-order: stroke;
+                   stroke: #0A0A0A; stroke-width: 3px; stroke-linejoin: round; }
+  .map .link { stroke-width: 1.5; }
+  .map .sel { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+  .map .rank { font-family: "Archivo", sans-serif; font-size: 12px; font-weight: 800;
+               fill: var(--accent); pointer-events: none; paint-order: stroke;
+               stroke: #0A0A0A; stroke-width: 4px; }
+
+  /* ---------- narrow screens ----------
+     The masthead is a single non-wrapping flex row, which is what pushed the
+     page past the viewport on a phone: brand plus nav plus clock came to about
+     780px however narrow the screen got. Everything here is about letting that
+     row, and the two fixed-column grids, reflow. */
+  @media (max-width: 680px) {
+    .mast {
+      flex-wrap: wrap;
+      gap: 12px 18px;
+      padding: 12px 16px;
+    }
+
+    .mast .right { margin-left: 0; width: 100%; }
+    .clock { width: 100%; text-align: left; }
+    .scrub { width: 100%; }
+    .scrub input { flex: 1; width: auto; min-width: 0; }
+    .beat { justify-content: flex-start; }
+    nav { margin-left: 0; }
+
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .kpi { padding: 16px 18px; border-bottom: 1px solid var(--line); }
+    .kpi .v { font-size: 32px; }
+
+    .stage, .rail { padding-left: 16px; padding-right: 16px; }
+
+    .grid-tiles { grid-template-columns: repeat(2, 1fr); }
+    .vstats { grid-template-columns: 1fr; gap: 14px; }
+    .opts-wide { grid-template-columns: 1fr; padding-left: 14px; padding-right: 14px; }
+  }
+
+  /* ---------- skeletons ---------- */
+  .sk { background: var(--panel-hi); position: relative; overflow: hidden; }
+  .sk::after { content: ""; position: absolute; inset: 0;
+               background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.045) 50%, transparent 100%);
+               animation: sweep 1.4s linear infinite; }
+  @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+  .status { padding: 32px 26px; color: var(--ink-dim); font-size: 14px; line-height: 1.6; }
+  .status code { background: var(--panel-hi); padding: 2px 6px; color: var(--ink); }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
+<script src="vendor/babel.min.js"></script>
+<script src="locate.js"></script>
+<script src="presence.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+/* Two ways to run.
+   On a developer machine the Python API is usually up, so the dashboard talks
+   to it live. Anywhere else there is no server at all: every response was
+   precomputed into data/hour-<n>.json by export_static.py, which is what lets
+   this be hosted as a plain static site with no cold start. */
+// This machine, or the live API reached over the local network (a phone on the same Wi-Fi).
+const LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost"
+  || /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname)
+  || location.hostname.endsWith(".vercel.app") || document.querySelector('meta[name="ep-live-api"]') !== null;
+const STATIC_MODE = !LOCAL;
+const API = location.port === "8080" ? "http://127.0.0.1:8000" : "";
+
+const WARN = 75;     // amber: start moving people
+const CRIT = 90;     // red: close enough to full that it needs acting on now
+const ROUTING = 45;  // onward directions start being offered
+const FULL = 99.5;   // rounds to 100% on screen, so treat it as full
+
+const DEMO_START_HOUR = 26;
+const LAST_HOUR = 144;
+const TICK_MS = 2500;
+
+const LETTERS = "ABCDEFGHIJ";
+
+// The dashboard's sections, in page order, as the header lists them. Each has an
+// element with id `${id}-section`.
+const NAV_SECTIONS = [
+  { id: "twin", label: "Digital Twin" },
+  { id: "weather", label: "Weather" },
+  { id: "social", label: "Social" },
+  { id: "pressure", label: "Pressure" },
+  { id: "venue", label: "Venue Floor" },
+  { id: "capacity", label: "Capacity" },
+  { id: "stays", label: "Stays" },
+];
+
+function bandColor(pct, hoursToSaturation) {
+  if (pct >= CRIT) return "var(--accent)";
+  if (hoursToSaturation != null && hoursToSaturation <= 4) return "var(--accent)";
+  if (pct >= WARN) return "var(--warn)";
+  if (hoursToSaturation != null && hoursToSaturation <= 12) return "var(--warn)";
+  return "var(--good)";
+}
+
+function num(n) { return n == null ? "n/a" : n.toLocaleString(); }
+
+/* Scroll a section to just under the sticky header. Timed rather than left to the
+   browser's smooth scroll, which can stall while the 3D map is busy drawing: this
+   always arrives, however slow the frames. The target is re-read every frame, so a
+   panel that grows on the way does not throw it off. A wheel or touch hands control back. */
+let scrollRun = 0;
+function scrollToSection(el) {
+  const run = ++scrollRun;
+  const target = () => {
+    const bar = document.querySelector(".topbar");
+    const offset = bar && getComputedStyle(bar).position === "sticky" ? bar.offsetHeight + 18 : 12;
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    return Math.max(0, Math.min(max, el.getBoundingClientRect().top + window.scrollY - offset));
+  };
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { window.scrollTo(0, target()); return; }
+  const from = window.scrollY, start = performance.now(), dur = 550;
+  const stop = () => { scrollRun++; };
+  window.addEventListener("wheel", stop, { once: true, passive: true });
+  window.addEventListener("touchstart", stop, { once: true, passive: true });
+  const tick = (now) => {
+    if (run !== scrollRun) return;
+    const t = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - t, 3);
+    window.scrollTo(0, from + (target() - from) * e);
+    if (t < 1) requestAnimationFrame(tick);
+    else { window.removeEventListener("wheel", stop); window.removeEventListener("touchstart", stop); }
+  };
+  requestAnimationFrame(tick);
+}
+function dayLabel(h) { return `D${Math.floor(h / 24) + 1} · ${String(h % 24).padStart(2, "0")}:00`; }
+
+/* Pressure map.
+   Zones sit at their real coordinates as discs sized by hotel capacity, with
+   occupancy read straight off the face. Transport links run underneath,
+   coloured by load, so accommodation pressure and the routes feeding it read
+   as one picture rather than two separate charts. */
+function PressureMap({ zones, forecasts, transport, selected, onSelect, recs }) {
+  if (!zones.length) return null;
+
+  const W = 980, H = 340, PAD = 58;
+
+  const lats = zones.map((z) => z.lat);
+  const lngs = zones.map((z) => z.lng);
+  const latMin = Math.min(...lats), latMax = Math.max(...lats);
+  const lngMin = Math.min(...lngs), lngMax = Math.max(...lngs);
+
+  // Latitude runs north but SVG y runs down, so y is inverted.
+  const px = (lng) => PAD + ((lng - lngMin) / (lngMax - lngMin || 1)) * (W - PAD * 2);
+  const py = (lat) => H - PAD - ((lat - latMin) / (latMax - latMin || 1)) * (H - PAD * 2);
+
+  const fcById = Object.fromEntries(forecasts.map((f) => [f.zone_id, f]));
+  const posById = Object.fromEntries(zones.map((z) => [z.id, { x: px(z.lng), y: py(z.lat) }]));
+
+  const maxCap = Math.max(...zones.map((z) => z.hotel_capacity));
+  const radius = (cap) => 15 + (cap / maxCap) * 15;
+
+  const linkColor = (pct) =>
+    pct >= 92 ? "var(--accent)" : pct >= 80 ? "var(--warn)" : "var(--line)";
+
+  const saturated = zones.filter((z) => z.occupancy_pct >= CRIT).length;
+  const filling = zones.filter((z) => z.occupancy_pct >= WARN && z.occupancy_pct < CRIT).length;
+
+  // Only draw routes out of a zone that is filling enough to need them.
+  const src = zones.find((z) => z.id === recs?.for_zone_id);
+  const routeFrom = src && src.occupancy_pct >= ROUTING ? src.id : null;
+
+  return (
+    <div className="map">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img"
+           aria-label="Map of zones showing current occupancy pressure">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+          </marker>
+          <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+            <path d="M 34 0 L 0 0 0 34" fill="none"
+                  stroke="var(--line)" strokeWidth="1" strokeOpacity="0.5" />
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width={W} height={H} fill="url(#grid)" />
+
+        {transport.map((l) => {
+          const a = posById[l.from_zone], b = posById[l.to_zone];
+          if (!a || !b) return null;
+          const hot = l.load_pct >= 80;
+          return (
+            <line
+              key={l.link_id}
+              className="link"
+              x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              stroke={linkColor(l.load_pct)}
+              strokeOpacity={(hot ? 0.8 : 0.3) * (routeFrom ? 0.45 : 1)}
+              strokeWidth={hot ? 2 : 1.25}
+            />
+          );
+        })}
+
+        {/* Advised routes. Drawn only once the source zone is filling enough
+            to warrant moving anyone, and ranked so the emptiest destination
+            reads first. */}
+        {routeFrom && recs?.options?.slice(0, 5).map((o, i) => {
+          const a = posById[routeFrom];
+          const b = posById[o.zone_id];
+          if (!a || !b) return null;
+          return (
+            <g key={`route-${o.zone_id}`}>
+              <line
+                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                stroke="var(--accent)"
+                strokeWidth={2}
+                strokeOpacity={0.9}
+                strokeDasharray="6 4"
+                markerEnd="url(#arrow)"
+              />
+              <text
+                className="rank"
+                x={a.x + (b.x - a.x) * 0.55}
+                y={a.y + (b.y - a.y) * 0.55 - 5}
+                textAnchor="middle"
+              >
+                {i + 1}
+              </text>
+            </g>
+          );
+        })}
+
+        {zones.map((z) => {
+          const fc = fcById[z.id];
+          const color = bandColor(z.occupancy_pct, fc?.hours_to_saturation);
+          const p = posById[z.id];
+          const r = radius(z.hotel_capacity);
+          const isSel = selected === z.id;
+
+          return (
+            <g key={z.id} className="node" onClick={() => onSelect(z.id)}>
+              {isSel && (
+                <circle className="sel" cx={p.x} cy={p.y} r={r + 6} />
+              )}
+              <circle
+                cx={p.x} cy={p.y} r={r}
+                fill={color} fillOpacity={0.22}
+                stroke={color} strokeWidth={z.is_venue_zone ? 2.5 : 1.5}
+              />
+              <text className="pctlabel" fill={color}
+                    x={p.x} y={p.y + 4} textAnchor="middle">
+                {z.occupancy_pct.toFixed(0)}%
+              </text>
+              <text className={`label${isSel ? " strong" : ""}`}
+                    x={p.x} y={p.y + r + 15} textAnchor="middle">
+                {z.name}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function Recommendations({ data, wide }) {
+  if (!data) return null;
+
+  if (!data.options?.length) {
+    return (
+      <div className="sect">
+        <h3 className="display">Nowhere to redirect</h3>
+        <div className="for">
+          Every nearby zone is above 80% or too far to be practical. Escalate to
+          transport rather than accommodation.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={wide ? "card" : "sect"}>
+      <div className={wide ? "card-head" : ""} style={wide ? {} : null}>
+        <div>
+          <span className="eyebrow">Incentive routing</span>
+          <h3 className="display" style={{ marginTop: 7 }}>Redirect Capacity</h3>
+        </div>
+        {wide && <span className="meta">Nearest first</span>}
+      </div>
+      <div className="for" style={wide ? { padding: "6px 18px 0" } : null}>
+        {wide
+          ? `Alternatives to ${data.for_zone_name}`
+          : `Alternatives to ${data.for_zone_name}, nearest first`}
+      </div>
+
+      <div className={wide ? "opts-wide" : ""}>
+      {data.options.map((o) => (
+        <div className="opt" key={o.zone_id}>
+          <div className="top">
+            <span className="nm">{o.zone_name}</span>
+            <span className="sc" style={{ color: bandColor(o.current_occupancy_pct, null) }}>
+              {o.current_occupancy_pct.toFixed(0)}% full
+            </span>
+          </div>
+          <div className="why">{o.reason}</div>
+          <div className="bars">
+            {[
+              ["capacity", o.score_breakdown.capacity_score],
+              ["distance", o.score_breakdown.distance_score],
+              ["cost", o.score_breakdown.cost_score],
+              ["overall", o.score],
+            ].map(([k, v]) => (
+              <div className="bar" key={k}>
+                <span>{k}</span>
+                <span className="t"><span className="f" style={{ width: `${v * 100}%` }} /></span>
+                <span className="v">{v.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      </div>
+    </div>
+  );
+}
+
+function Scorecard({ data }) {
+  if (!data) return null;
+
+  return (
+    <div className="sect">
+      <span className="eyebrow">Model</span>
+      <h3 className="display" style={{ marginTop: 7 }}>Forecast Accuracy</h3>
+      <div className="sub">
+        Tested on {data.test_rows} held-out hours, {data.horizon_hours}h ahead
+      </div>
+
+      <div className="sc-row head">
+        <span>Method</span><span className="n">MAE</span><span className="n">R&sup2;</span>
+      </div>
+      <div className="sc-row">
+        <span>{data.baseline.name}</span>
+        <span className="n">{data.baseline.mae}</span>
+        <span className="n">{data.baseline.r2}</span>
+      </div>
+      <div className="sc-row win">
+        <span>{data.model.name}</span>
+        <span className="n">{data.model.mae}</span>
+        <span className="n">{data.model.r2}</span>
+      </div>
+
+      <div className="sc-gain">
+        <b>{data.mae_improvement_pct}%</b> lower error than extending the recent
+        trend. The model reads each zone's daily cycle and its neighbours, which
+        a single-zone trend line cannot.
+      </div>
+    </div>
+  );
+}
+
+
+
+
+// Where the demo starts. The Opening Ceremony runs at hours 30-33, and
+// transport peaks as the crowd arrives and again on egress. Starting at 26
+// leaves about ten seconds to introduce the screen before the first spike.
+
+// Real milliseconds per simulated hour. Slow enough to read a change,
+// fast enough that a demo reaches the peak without dead air.
+
+/* What-if simulator.
+   A recommendation says where to send people. This tests what happens if you
+   actually do it: how far the source zone drops, where the visitors land, and
+   whether the alert clears. Compliance is modelled because in practice not
+   everyone follows guidance. */
+// Preset disruption scenarios. Each is a real API call against real IDs
+// from the generated dataset — the biggest scheduled event and the link
+// connecting the stadium to South Market — not placeholders, so results
+// change with the hour like everything else on the dashboard.
+const SCENARIO_PRESETS = [
+  { key: "cancel", label: "Cancel Semi Final now" },
+  { key: "surge", label: "+10,000 surge on Semi Final" },
+  { key: "close-link", label: "Close Stadium ↔ South Market link" },
+];
+
+function DisruptionScenarios({ hour }) {
+  const [active, setActive] = useState(null);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (key) => {
+    setActive(key);
+    setBusy(true);
+    setResult(null);
+
+    const url =
+      key === "cancel" ? `${API}/scenarios/cancel/E5?hour=${hour}` :
+      key === "surge" ? `${API}/scenarios/surge/E5?extra=10000&hour=${hour}` :
+      `${API}/scenarios/close-link/L008?hour=${hour}`;
+
+    try {
+      const d = await fetch(url).then((r) => (r.ok ? r.json() : null));
+      setResult(d);
+    } catch (e) {
+      setResult(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (STATIC_MODE) {
+    return (
+      <div className="card">
+        <div className="card-head">
+          <h3 className="display">Disruption Scenarios</h3>
+          <span className="meta">Needs the live API</span>
+        </div>
+        <div style={{ padding: "12px 18px 18px" }} className="empty">
+          These run against the live backend and aren't precomputed into the
+          static bundle. Run the API locally (see DEPLOY.md) to try them.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h3 className="display">Disruption Scenarios</h3>
+        <span className="meta">What-if, at scale</span>
+      </div>
+      <div style={{ padding: "12px 18px 18px" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          {SCENARIO_PRESETS.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => run(s.key)}
+              disabled={busy}
+              style={{
+                border: "1px solid var(--line, rgba(255,255,255,0.12))",
+                borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600,
+                cursor: "pointer", color: "var(--ink)",
+                background: active === s.key ? "rgba(255,255,255,0.08)" : "transparent",
+              }}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {busy && <div className="sk" style={{ height: 50 }} />}
+
+        {!busy && result && active === "cancel" && (
+          <div className="note">
+            {result.already_admitted.toLocaleString()} already inside when cancelled &middot;
+            egress {result.before.egress.hours_to_clear_zone}h [{result.before.egress.severity}]
+            {" → "}
+            {result.after.egress.hours_to_clear_zone}h [{result.after.egress.severity}]
+            &middot; alerts {result.alerts_before} → {result.alerts_after}
+          </div>
+        )}
+
+        {!busy && result && active === "surge" && (
+          <div className="note">
+            expected {result.before.expected_attendance.toLocaleString()} {"→"}{" "}
+            {result.after.expected_attendance.toLocaleString()} &middot; turned away{" "}
+            {result.before.turned_away.toLocaleString()} {"→"}{" "}
+            {result.after.turned_away.toLocaleString()} &middot; ingress{" "}
+            {result.before.ingress_severity} {"→"} {result.after.ingress_severity}
+          </div>
+        )}
+
+        {!busy && result && active === "close-link" && (
+          <div className="note">
+            {result.from_zone} {"↔"} {result.to_zone}: {result.before.route.verdict}{" "}
+            {"→"} {result.after.route.verdict}
+            {result.after.route.summary ? ` — ${result.after.route.summary}` : ""}
+          </div>
+        )}
+
+        {!busy && result && result.error && (
+          <div className="note">{result.error}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Simulator({ zoneId, zoneName, hour, sims }) {
+  const [move, setMove] = useState(600);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  // Reset to a sensible default whenever the selected zone changes.
+  useEffect(() => { setMove(600); setResult(null); }, [zoneId]);
+
+  useEffect(() => {
+    if (!zoneId) return;
+
+    // Static mode already holds every slider position for this zone and hour,
+    // so there is nothing to fetch and no debounce to wait through.
+    if (sims) {
+      setResult(sims[String(move)] || null);
+      setBusy(false);
+      return;
+    }
+
+    let cancelled = false;
+    setBusy(true);
+
+    const t = setTimeout(() => {
+      fetch(`${API}/simulate/${zoneId}?move=${move}&hour=${hour}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (!cancelled) { setResult(d); setBusy(false); } })
+        .catch(() => { if (!cancelled) { setResult(null); setBusy(false); } });
+    }, 180);
+
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [zoneId, move, hour, sims]);
+
+  if (!zoneId) return null;
+
+  const src = result?.source;
+
+  return (
+    <div className="sect">
+      <h3 className="display" style={{ margin: "6px 0 0" }}>Scenario Sim</h3>
+      <div className="lead">
+        What happens if you move visitors out of {zoneName}
+      </div>
+
+      <div className="sim-ctl">
+        <div className="row">
+          <span>Visitors to redirect</span>
+          <span className="amt">{move.toLocaleString()}</span>
+        </div>
+        <input
+          type="range" min="100" max="2500" step="100" value={move}
+          onChange={(e) => setMove(Number(e.target.value))}
+          aria-label="Number of visitors to redirect"
+        />
+      </div>
+
+      {!result && busy && (
+        <div className="sk" style={{ height: 74, marginBottom: 10 }} />
+      )}
+
+      {src && (
+        <>
+          <div className="outcome">
+            <div className="shift">
+              <span style={{ color: bandColor(src.occupancy_before_pct, null) }}>
+                {src.occupancy_before_pct}%
+              </span>
+              <span className="arrow">to</span>
+              <span style={{ color: bandColor(src.occupancy_after_pct, null) }}>
+                {src.occupancy_after_pct}%
+              </span>
+            </div>
+            <div className="note">
+              {result.relocated.toLocaleString()} actually relocate.
+              {" "}{result.stayed_put.toLocaleString()} ignore the guidance
+              {result.unplaceable > 0
+                ? `, ${result.unplaceable.toLocaleString()} have nowhere to go.`
+                : "."}
+            </div>
+          </div>
+
+          <div className={`verdict ${
+            src.status_before === "ok" || result.alert_clears ? "clears" : "partial"
+          }`}>
+            {src.status_before === "ok"
+              ? `${zoneName} is not under pressure yet. This would take it to ` +
+                `${src.occupancy_after_pct}%, freeing capacity ahead of the next surge.`
+              : result.alert_clears
+                ? `The alert clears. ${zoneName} drops below the warning threshold.`
+                : src.hours_to_saturation_after != null
+                  ? `Not enough. ${zoneName} still saturates in about ${src.hours_to_saturation_after}h.`
+                  : `Pressure eases but ${zoneName} stays above the warning threshold.`}
+          </div>
+
+          {result.placements.length > 0 && (
+            <div>
+              {result.placements.map((p) => (
+                <div className="landing" key={p.zone_id}>
+                  <span className="to">{p.zone_name}</span>
+                  <span className="n">+{p.received.toLocaleString()}</span>
+                  <span className="pc">
+                    {p.occupancy_before_pct}% to {p.occupancy_after_pct}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* Orchestration log. A record of what the platform flagged and what the
+   operator did about it, newest first. */
+function ActivityLog({ entries }) {
+  if (!entries.length) return null;
+
+  return (
+    <div className="sect">
+      <span className="eyebrow">Orchestration log</span>
+      <h3 className="display" style={{ marginTop: 7, marginBottom: 14 }}>Recent Activity</h3>
+      {entries.map((e, i) => (
+        <div className="entry" key={i}>
+          <div className="head">
+            {e.title}
+            <span className="when">D{Math.floor(e.hour / 24) + 1} · {String(e.hour % 24).padStart(2, "0")}:00</span>
+          </div>
+          <div className="detail">{e.body}</div>
+          <div className={`metric${e.kind === "alert" ? " warn" : ""}`}>{e.metric}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+
+/* Zone absorption grid.
+   The map answers "where"; this answers "how much is left and which way is it
+   moving". A tile per zone showing occupancy and its three-hour drift, so a
+   zone filling fast reads differently from one sitting still at the same level.
+   The zone with the most headroom is called out, since that is where arrivals
+   should go next. */
+function AbsorptionGrid({ zones, forecasts, selected, onSelect }) {
+  if (!zones.length) {
+    return (
+      <div className="card">
+        <div className="card-head"><h3 className="display">Spare Capacity</h3></div>
+        <div className="grid-tiles">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div className="sk" key={i} style={{ height: 76 }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const fcById = Object.fromEntries(forecasts.map((f) => [f.zone_id, f]));
+
+  const rows = zones.map((z, i) => {
+    const fc = fcById[z.id];
+    return {
+      ...z,
+      letter: LETTERS[i] || "?",
+      spare: z.spare_capacity,
+      trend: fc ? fc.trend_pct_per_hour : 0,
+    };
+  });
+
+  // Emptiest by percentage, which is what the tiles actually display. Ranking
+  // on absolute spare beds instead put the highlight on a large zone at 54%
+  // while a small one sat at 27%, so the tile and its highlight disagreed.
+  // Spare beds break ties between zones at the same occupancy.
+  const best = [...rows].filter((r) => r.occupancy_pct < FULL)
+    .sort((a, b) => (a.occupancy_pct - b.occupancy_pct) || (b.spare - a.spare))[0];
+
+  const atRisk = rows.filter((r) => r.occupancy_pct >= WARN).length;
+  const totalCap = rows.reduce((s, r) => s + r.hotel_capacity, 0);
+  const cityLoad = totalCap
+    ? Math.round(rows.reduce((s, r) => s + r.current_occupancy, 0) / totalCap * 100)
+    : 0;
+
+  const hottest = [...rows].sort((a, b) => b.occupancy_pct - a.occupancy_pct)[0];
+  const catchers = [...rows]
+    .filter((r) => r.id !== hottest.id && r.occupancy_pct < WARN)
+    .sort((a, b) => a.distance_to_venue_km - b.distance_to_venue_km)
+    .slice(0, 2);
+
+  return (
+    <div className="card navsec" id="capacity-section">
+      <div className="card-head">
+        <h3 className="display">Spare Capacity</h3>
+        <span className="meta">Which zones can absorb overflow · {rows.length} zones</span>
+      </div>
+
+      <div className="grid-tiles">
+        {rows.map((r) => {
+          const isBest = best && r.id === best.id;
+          const isHot = r.occupancy_pct >= CRIT;
+          // Same band the map and chart use, so a zone never reads two ways.
+          const band = r.occupancy_pct >= WARN ? "band-warn" : "band-ok";
+          const fill = isHot ? " hot" : isBest ? " best" : ` ${band}`;
+          return (
+            <button
+              key={r.id}
+              className={`tile${r.id === selected ? " sel" : ""}${fill}`}
+              onClick={() => onSelect(r.id)}
+              title={`${r.name}: ${num(r.spare)} beds free`}
+            >
+              <span className="id">{r.letter}</span>
+              <span className="pct">{r.occupancy_pct.toFixed(0)}</span>
+              <div className="delta">
+                {r.trend > 0 ? "+" : ""}{(r.trend * 3).toFixed(0)} / 3h
+              </div>
+              <div className="zname">{r.name}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="propagation">
+        <span className="eyebrow dim">Propagation</span>
+        <p>
+          {catchers.length
+            ? `If ${hottest.name} fills first, ${catchers.map((c) => c.name).join(" and ")} absorb the overflow, ${num(catchers.reduce((s, c) => s + c.spare, 0))} beds between them.`
+            : `${hottest.name} is at ${hottest.occupancy_pct.toFixed(0)}% and every nearby zone is already past ${WARN}%.`}
+          {" "}Grid load {cityLoad}%, {atRisk} zone{atRisk === 1 ? "" : "s"} at risk.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* Places to stay, nearest first.
+   Ranked only by distance from the visitor (or from the venue, until they share a
+   location). There is no live room availability from the hotels, so nothing here
+   says a place is filling up or how many rooms are left. */
+const STAYS_SHOWN = 6;
+
+function Stays({ hotels, pos, venues }) {
+  const [all, setAll] = useState(false);
+  const [geo, setGeo] = useState(() => EPLocate.get().status);
+  useEffect(() => EPLocate.onChange((g) => setGeo(g.status)), []);
+
+  if (!hotels.length) {
+    return (
+      <div className="stays-grid">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div className="stay-card" key={i}>
+            <div className="sk" style={{ height: 22, width: "70%" }} />
+            <div className="sk" style={{ height: 14, width: "50%", marginTop: 12 }} />
+            <div className="sk" style={{ height: 40, marginTop: 18 }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const fromYou = !!pos;
+  const ranked = fromYou
+    ? EPLocate.rankHotels(hotels, pos.lat, pos.lng)
+    : [...hotels].sort((a, b) => a.distance_to_venue_km - b.distance_to_venue_km)
+        .map((h) => ({ hotel: h, km: h.distance_to_venue_km, minutes: h.travel_minutes, mode: "ride" }));
+  const farthest = fromYou && ranked.length && ranked[0].km > 25;
+  const shown = all ? ranked : ranked.slice(0, STAYS_SHOWN);
+  const dist = (km) => (km < 1 ? `${Math.round(km * 100) * 10} m` : `${km.toFixed(1)} km`);
+  const venueName = venues && venues.length ? venues[0].venue_name : "the venue";
+
+  return (
+    <>
+      <div className="stays-head">
+        <div>
+          <span className="eyebrow">Places to stay</span>
+          <h2 className="display" style={{ marginTop: 8 }}>{fromYou ? "Stays near you" : "Stays near the venue"}</h2>
+          <div className="lead">
+            {fromYou
+              ? (farthest ? "You're outside the area we cover, so these are the closest we know of." : "Nearest first, from where you are now. The list follows you as you move.")
+              : "Nearest to the main venue first. Share your location to sort them by distance from you instead."}
+          </div>
+        </div>
+        {!fromYou && (geo === "off" || geo === "denied" || geo === "unavailable") && (
+          <button className="stays-locate" onClick={() => EPLocate.start()}>
+            <span className="youdot" aria-hidden="true" />Use my location
+          </button>
+        )}
+        {!fromYou && geo === "asking" && <span className="meta">Finding you...</span>}
+      </div>
+
+      <div className="stays-grid">
+        {shown.map((r, i) => {
+          const h = r.hotel;
+          return (
+            <article className={`stay-card${i === 0 ? " first" : ""}`} key={h.hotel_id}>
+              <div className="stay-top">
+                <span className="stay-rank">{i === 0 ? (fromYou ? "Closest to you" : "Closest to the venue") : `#${i + 1}`}</span>
+                <span className="rating" aria-label={`Rated ${h.rating.toFixed(1)} out of 5`}>{h.rating.toFixed(1)}&#9733;</span>
+              </div>
+              <h4>{h.name}</h4>
+              <div className="zone-line">{h.zone_name}</div>
+              <div className="stay-dist">
+                <b>{dist(r.km)}</b>
+                <span>{fromYou ? `from you · about ${r.minutes} min ${r.mode === "walk" ? "on foot" : "by car"}` : `from ${venueName}`}</span>
+              </div>
+              <div className="stay-foot">
+                <span>{h.is_venue_zone ? "Walk to the venue" : `${h.travel_minutes} min to the venue`}</span>
+                <span className="price">Rs {h.nightly_rate.toLocaleString()}<small> / night</small></span>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {ranked.length > STAYS_SHOWN && (
+        <button className="stays-more" onClick={() => setAll((v) => !v)}>
+          {all ? "Show fewer" : `Show all ${ranked.length} stays`}
+        </button>
+      )}
+    </>
+  );
+}
+
+
+/* Next up.
+   Occupancy rises because something is coming. Without the schedule on screen
+   the dashboard shows pressure with no cause, and an operator has to already
+   know the fixture list to read it. */
+function NextUp({ data }) {
+  if (!data?.schedule?.length) {
+    return (
+      <div className="sect">
+        <span className="eyebrow">Schedule</span>
+        <h3 className="display" style={{ marginTop: 7 }}>Next Up</h3>
+        <div className="empty">Nothing further scheduled in this window.</div>
+      </div>
+    );
+  }
+
+  const band = (e) =>
+    e.state === "running" ? "now" : e.hours_away <= 6 ? "soon" : "later";
+
+  const when = (e) =>
+    e.state === "running" ? "Underway" : `in ${e.hours_away}h`;
+
+  return (
+    <div className="sect">
+      <span className="eyebrow">Schedule</span>
+      <h3 className="display" style={{ marginTop: 7 }}>Next Up</h3>
+      <div className="lead">What the pressure is building towards</div>
+
+      {data.schedule.slice(0, 3).map((e) => (
+        <div className="ev" key={e.event_id}>
+          <div className="row1">
+            <span className="nm">{e.name}</span>
+            <span className={`cd ${band(e)}`}>{when(e)}</span>
+          </div>
+          <div className="row2">
+            {e.zone_name} · {e.expected_attendance.toLocaleString()} expected
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IncentivesPanel({ hour, staticData }) {
+  const [offers, setOffers] = useState([]);
+
+  useEffect(() => {
+    if (staticData) {
+      setOffers(staticData || []);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`${API}/incentives?hour=${hour}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setOffers(d || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [hour, staticData]);
+
+  if (!offers.length) {
+    return (
+      <div className="sect">
+        <span className="eyebrow">Demand shifting</span>
+        <h3 className="display" style={{ marginTop: 7 }}>Incentives</h3>
+        <div className="empty">No zone crowded enough to trigger an offer.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sect">
+      <span className="eyebrow">Demand shifting</span>
+      <h3 className="display" style={{ marginTop: 7 }}>Incentives</h3>
+      <div className="lead">Discount sized to how crowded the source zone is</div>
+
+      {offers.slice(0, 4).map((o, i) => (
+        <div className="ev" key={i}>
+          <div className="row1">
+            <span className="nm">{o.destination_zone_name}</span>
+            <span className="cd now">{o.discount_pct}% off</span>
+          </div>
+          <div className="row2">
+            To relieve {o.source_zone_name} ({o.source_occupancy_pct.toFixed(0)}%) &middot;{" "}
+            {o.distance_km}km away
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* Transport load.
+   The problem statement names congestion and last-mile connectivity alongside
+   accommodation, and the link data is hourly. Until now it only surfaced as
+   alerts and faint lines on the map, which understates half the problem. */
+function TransportLoad({ links, zones, reroutes }) {
+  if (!links.length) return null;
+
+  // Zone ids mean nothing to an operator reading a control screen.
+  const nameOf = Object.fromEntries((zones || []).map((z) => [z.id, z.name]));
+
+  const busiest = [...links]
+    .sort((a, b) => b.load_pct - a.load_pct)
+    .slice(0, 4);
+
+  const colour = (pct) =>
+    pct >= 92 ? "var(--accent)" : pct >= 80 ? "var(--warn)" : "var(--good)";
+
+  const hot = links.filter((l) => l.load_pct >= 80).length;
+
+  return (
+    <div className="sect">
+      <span className="eyebrow">Last mile</span>
+      <h3 className="display" style={{ marginTop: 7 }}>Transport Load</h3>
+      <div className="lead">
+        {hot > 0
+          ? `${hot} of ${links.length} links above 80%`
+          : `All ${links.length} links running clear`}
+      </div>
+
+      {busiest.map((l) => (
+        <div className="link-row" key={l.link_id}>
+          <div className="r1">
+            <span className="rt">
+              {nameOf[l.from_zone] || l.from_zone} to {nameOf[l.to_zone] || l.to_zone}
+            </span>
+            <span className="lv" style={{ color: colour(l.load_pct) }}>
+              {l.load_pct.toFixed(0)}%
+            </span>
+          </div>
+          <div className="track">
+            <div className="fillbar"
+                 style={{ width: `${Math.min(100, l.load_pct)}%`,
+                          background: colour(l.load_pct) }} />
+          </div>
+          <div className="cap">
+            {l.mode} · {l.current_load.toLocaleString()} of {l.capacity_per_hour.toLocaleString()} per hour
+          </div>
+
+          {/* What to do about it. A congested link with no answer underneath
+              tells an operator nothing they cannot already see. */}
+          {(() => {
+            const r = reroutes?.[l.link_id];
+            if (!r || r.verdict === "clear") return null;
+
+            if (r.verdict === "no_relief") {
+              return (
+                <div className="alt">
+                  <span>No alternative; every route out is saturated. Stagger departures.</span>
+                </div>
+              );
+            }
+
+            const b = r.best_alternative;
+            return (
+              <div className="alt relief">
+                <span className="go">{b.label}</span>
+                <span>{b.bottleneck_pct.toFixed(0)}%</span>
+                <span className="cost">+{b.extra_minutes} min</span>
+              </div>
+            );
+          })()}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* Venue capacity.
+   Everything else on this screen treats an event as a source of demand. This
+   treats it as a building with doors and a seat count, which is a different
+   constraint and fails in three different ways: too many tickets, gates too
+   slow, or a network outside that cannot absorb the crowd at the end. */
+// Colour + label for a gate's auto-computed state. This is never set by a
+// click — it is derived server-side each tick from queue load (pre-event)
+// or exit load (post-event), so the badge just reflects what the crowd is
+// actually doing at this gate right now.
+// Gates never pass 100% of capacity: busy (amber) from 75%, closed to new people (red)
+// from 95%, with the overflow redirected to gates with room.
+const GATE_WARN = 75, GATE_CLOSE = 95;
+const GATE_LIVE = {
+  open:       { label: "Open",   color: "var(--good)" },
+  restricted: { label: "Busy",   color: "var(--warn, #d9a441)" },
+  closed:     { label: "Closed", color: "var(--accent)" },
+};
+const gatePct = (g) => Math.min(100, g.load_pct != null ? g.load_pct : (g.load_ratio || 0) * 100);
+const gateColor = (pct) => (pct >= GATE_CLOSE ? "var(--accent)" : pct >= GATE_WARN ? "var(--warn, #d9a441)" : "var(--good)");
+
+function ExitRedirect({ zoneId, hour, staticData }) {
+  const [rec, setRec] = useState(null);
+
+  useEffect(() => {
+    if (!zoneId) return;
+
+    if (staticData) {
+      setRec(staticData[zoneId] || null);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`${API}/exit-redirect/${zoneId}?hour=${hour}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setRec(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [zoneId, hour, staticData]);
+
+  if (!rec?.options?.length) return null;
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <span className="eyebrow dim">Recommended exit &mdash; {zoneId}</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+        {rec.options.map((o, i) => {
+          const live = GATE_LIVE[o.live_status] || GATE_LIVE.open;
+          return (
+            <div key={o.gate_id} className={`exit-opt${i === 0 ? " best" : ""}`}>
+              <div>
+                <div className="exit-name">{i + 1}. {o.name}</div>
+                <div className="exit-why">{o.reason}</div>
+              </div>
+              <span className="exit-status" style={{ color: live.color }}>{live.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GatePanel({ zoneId, gates, held }) {
+  if (!gates?.length) return null;
+  const flowing = gates.some((g) => g.phase && g.phase !== "idle");
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <span className="eyebrow dim">Gates · live, automatic · busy from {GATE_WARN}%, close at {GATE_CLOSE}%</span>
+      {held > 0 && (
+        <div className="gate-held">Every gate is at capacity: {held.toLocaleString()} people are being held back and asked to wait.</div>
+      )}
+      <div className="gate-list">
+        {gates.map((g) => {
+          const live = GATE_LIVE[g.live_status] || GATE_LIVE.open;
+          const oos = g.status && g.status !== "open";
+          const pct = gatePct(g);
+          return (
+            <div key={g.gate_id} className="gate-row">
+              <div className="gate-top">
+                <b>{g.name}</b>
+                <span className="gate-pct" style={{ color: flowing && !oos ? gateColor(pct) : "var(--ink-faint)" }}>
+                  {oos ? "out of service" : flowing && g.phase !== "idle" ? `${Math.round(pct)}%` : "idle"}
+                </span>
+                <span className="gate-badge" style={{ background: oos ? "#444" : live.color }}>{oos ? "Out of service" : live.label}</span>
+              </div>
+              {g.phase !== "idle" && !oos && (
+                <div className="gate-bar" aria-hidden="true">
+                  <i style={{ width: `${pct}%`, background: gateColor(pct) }} />
+                  <em style={{ left: `${GATE_WARN}%` }} /><em style={{ left: `${GATE_CLOSE}%` }} />
+                </div>
+              )}
+              <div className="note">
+                {g.phase === "ingress" ? "Letting people in" : g.phase === "egress" ? "Letting people out" : "No crowd right now"}
+                {" \u00B7 "}in {g.entry_capacity_per_hour.toLocaleString()}/h, out {g.exit_capacity_per_hour.toLocaleString()}/h
+                {g.demand_pct > 100 ? ` \u00B7 demand ${Math.round(g.demand_pct)}% of capacity` : ""}
+              </div>
+              {g.redirect_to && g.redirect_to.length > 0 && (
+                <div className="gate-redirect out">
+                  Closed at {GATE_CLOSE}% &middot; sending {g.redirected_out.toLocaleString()} people to{" "}
+                  {g.redirect_to.map((t) => `${t.name} (${t.people.toLocaleString()})`).join(", ")}
+                </div>
+              )}
+              {g.redirect_from && g.redirect_from.length > 0 && (
+                <div className="gate-redirect in">
+                  +{g.redirected_in.toLocaleString()} redirected from {g.redirect_from.map((t) => t.name).join(", ")}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Floor density.
+   The venue drawn as a floor: its footprint (or the organiser's uploaded plan), a heat
+   glow per area sized by capacity and coloured by how full it is, each gate where it
+   really is with its live state, and a flow line from gate to concourse that runs
+   inward while people arrive and outward while they leave. Colours follow the density
+   engine's own thresholds: at capacity is amber, twice capacity is critical. */
+const HEAT_STOPS = [[0, [0, 196, 106]], [60, [0, 196, 106]], [75, [232, 163, 61]], [95, [255, 59, 31]], [100, [255, 59, 31]]];
+function heat(pct, alpha = 1) {
+  const p = Math.max(0, Math.min(100, pct));
+  let i = 0;
+  while (i < HEAT_STOPS.length - 2 && p > HEAT_STOPS[i + 1][0]) i++;
+  const [p0, c0] = HEAT_STOPS[i], [p1, c1] = HEAT_STOPS[i + 1];
+  const t = (p - p0) / (p1 - p0);
+  const c = c0.map((v, k) => Math.round(v + (c1[k] - v) * t));
+  return `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
+}
+
+function FloorDensity({ zoneId, hour, staticData, gates }) {
+  const [zones, setZones] = useState([]);
+  const [plan, setPlan] = useState(null);       // { url, aspect } when the organiser uploaded one
+  const [hover, setHover] = useState(null);
+
+  useEffect(() => {
+    if (!zoneId) return;
+    // On a static deploy there is no live API to fetch from; the hour bundle
+    // already carries this venue's density, precomputed.
+    if (staticData) { setZones(staticData[zoneId] || []); return; }
+    let cancelled = false;
+    fetch(`${API}/density/${zoneId}?hour=${hour}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setZones(d || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [zoneId, hour, staticData]);
+
+  useEffect(() => {
+    setPlan(null);
+    if (!zoneId || STATIC_MODE) return;
+    const img = new Image();
+    const url = `${API}/organizer/venues/${zoneId}/map`;
+    img.onload = () => setPlan({ url, aspect: img.naturalWidth / img.naturalHeight });
+    img.onerror = () => {};
+    img.src = url;
+  }, [zoneId]);
+
+  if (!zones.length) return null;
+
+  const gateById = Object.fromEntries((gates || []).map((g) => [g.gate_id, g]));
+  const total = zones.reduce((s, z) => s + z.people_count, 0);
+  const ranked = [...zones].sort((a, b) => b.occupancy_pct - a.occupancy_pct);
+  const maxCap = Math.max(...zones.map((z) => z.capacity));
+  const phase = (gates || []).find((g) => g.phase && g.phase !== "idle")?.phase;
+  // One curve per (closed gate -> receiving gate), bowed outward from the centre of the
+  // floor so it runs round the venue rather than across the pitch.
+  const gateXY = Object.fromEntries((gates || []).map((g) => [g.gate_id, { x: g.x, y: g.y, name: g.name }]));
+  const maxMove = Math.max(1, ...(gates || []).flatMap((g) => (g.redirect_to || []).map((t) => t.people)));
+  const redirects = (gates || []).flatMap((g) => (g.redirect_to || []).filter((t) => gateXY[t.gate_id]).map((t) => {
+    const a = gateXY[g.gate_id], b = gateXY[t.gate_id];
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    let dx = mx - 50, dy = my - 52;
+    const len = Math.hypot(dx, dy);
+    if (len < 6) { dx = -(b.y - a.y); dy = b.x - a.x; }
+    const n = Math.hypot(dx, dy) || 1;
+    const c = { x: mx + (dx / n) * 22, y: my + (dy / n) * 22 };
+    const m = { x: 0.25 * a.x + 0.5 * c.x + 0.25 * b.x, y: 0.25 * a.y + 0.5 * c.y + 0.25 * b.y };
+    const clampP = (p) => ({ x: Math.max(4, Math.min(96, p.x)), y: Math.max(4, Math.min(96, p.y)) });
+    return { key: `${g.gate_id}-${t.gate_id}`, a, b, c, m: clampP(m), people: t.people, to: t.name, share: t.people / maxMove };
+  }));
+  const aspect = plan ? plan.aspect : 16 / 10;
+  // Any area at 95% or more: send people to the nearest gate they can use, drawn as an arrow
+  // from the area to that gate. Prefer gates open to people; if every gate is shut to new
+  // arrivals (mid-event), the nearest working gate is still the way out.
+  const usable = (gates || []).filter((g) => !(g.status && g.status !== "open"));
+  const openG = usable.filter((g) => g.live_status !== "closed");
+  const pool = openG.length ? openG : usable;
+  const dist = (a, b) => Math.hypot((a.x - b.x) * aspect, a.y - b.y);
+  const guides = pool.length ? zones.filter((z) => z.occupancy_pct >= GATE_CLOSE).map((z) => {
+    const g = pool.slice().sort((a, b) => dist(z, a) - dist(z, b))[0];
+    const ang = Math.atan2(g.y - z.y, (g.x - z.x) * aspect) * 180 / Math.PI;
+    const tip = { x: z.x + (g.x - z.x) * 0.86, y: z.y + (g.y - z.y) * 0.86 };
+    const mid = { x: z.x + (g.x - z.x) * 0.5, y: z.y + (g.y - z.y) * 0.5 };
+    return { key: z.floor_zone_id, zone: z, gate: g, ang, tip, mid };
+  }) : [];
+  const guideFor = Object.fromEntries(guides.map((d) => [d.zone.floor_zone_id, d]));
+
+  return (
+    <div className="fd">
+      <div className="fd-head">
+        <span className="eyebrow dim">Floor density · live</span>
+        <span className="fd-sum">
+          <b>{total.toLocaleString()}</b> people inside
+          {phase ? <> · <span className={`fd-phase ${phase}`}>{phase === "ingress" ? "Arriving" : "Leaving"}</span></> : null}
+        </span>
+      </div>
+
+      <div className="fd-layout">
+        <div className={`fd-floor${plan ? "" : " schem"}`} style={{ aspectRatio: String(aspect) }} onMouseLeave={() => setHover(null)}>
+          {plan
+            ? <img className="fd-plan" src={plan.url} alt="" draggable="false" />
+            : (
+              <svg className="fd-site" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <pattern id="fdgrid" width="5" height="5" patternUnits="userSpaceOnUse">
+                    <path d="M5 0H0V5" fill="none" stroke="rgba(255,255,255,.035)" strokeWidth="0.3" vectorEffect="non-scaling-stroke" />
+                  </pattern>
+                </defs>
+                <rect width="100" height="100" fill="url(#fdgrid)" />
+                <ellipse cx="50" cy="52" rx="44" ry="42" fill="rgba(255,255,255,.025)" stroke="rgba(255,255,255,.16)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                <ellipse cx="50" cy="52" rx="33" ry="30" fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+              </svg>
+            )}
+
+          {/* heat: one soft glow per area, sized by capacity, coloured by occupancy */}
+          {zones.map((z) => {
+            const d = (z.kind === "bowl" ? 58 : 20 + 16 * Math.sqrt(z.capacity / maxCap));
+            const a = 0.25 + 0.55 * Math.min(1, z.occupancy_pct / 120);
+            return (
+              <div key={`h-${z.floor_zone_id}`} className="fd-heat"
+                   style={{ left: `${z.x}%`, top: `${z.y}%`, width: `${d}%`,
+                            background: `radial-gradient(closest-side, ${heat(z.occupancy_pct, a)}, ${heat(z.occupancy_pct, a * 0.35)} 55%, transparent)` }} />
+            );
+          })}
+
+          {/* flow lines between each concourse and its gate */}
+          <svg className="fd-flow" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            {zones.filter((z) => z.kind !== "bowl").map((z) => {
+              const g = gateById[z.floor_zone_id.replace(/-CONCOURSE$/, "")];
+              if (!g) return null;
+              const live = GATE_LIVE[g.live_status] || GATE_LIVE.open;
+              const moving = g.phase && g.phase !== "idle";       // people are coming through, queue or not
+              // Ingress runs gate -> concourse, egress concourse -> gate.
+              const [x1, y1, x2, y2] = g.phase === "egress" ? [z.x, z.y, g.x, g.y] : [g.x, g.y, z.x, z.y];
+              return (
+                <line key={`f-${z.floor_zone_id}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                      className={moving ? "moving" : ""} stroke={live.color}
+                      strokeWidth={moving ? 2 + Math.min(3, g.load_ratio * 3) : 1.2}
+                      strokeOpacity={moving ? 0.9 : 0.35} vectorEffect="non-scaling-stroke" />
+              );
+            })}
+          </svg>
+
+          {/* redirected crowd: from each closed gate, round the outside to the gates taking its overflow */}
+          {redirects.length > 0 && (
+            <svg className="fd-redir" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              {redirects.map((r) => (
+                <path key={r.key} d={`M ${r.a.x} ${r.a.y} Q ${r.c.x} ${r.c.y} ${r.b.x} ${r.b.y}`} fill="none"
+                      stroke="#FF3B1F" strokeWidth={1.5 + 4 * r.share} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              ))}
+            </svg>
+          )}
+          {redirects.map((r) => (
+            <div key={`l-${r.key}`} className="fd-redir-lbl" style={{ left: `${r.m.x}%`, top: `${r.m.y}%` }}>
+              {r.people.toLocaleString()} &rarr; {r.to}
+            </div>
+          ))}
+
+          {/* too full: the way to the nearest usable gate */}
+          {guides.length > 0 && (
+            <svg className="fd-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              {guides.map((d) => (
+                <line key={d.key} x1={d.zone.x} y1={d.zone.y} x2={d.tip.x} y2={d.tip.y}
+                      stroke="#4DA3FF" strokeWidth="3.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              ))}
+            </svg>
+          )}
+          {guides.map((d) => (
+            <React.Fragment key={`g-${d.key}`}>
+              <div className="fd-guide-head" style={{ left: `${d.tip.x}%`, top: `${d.tip.y}%`, transform: `translate(-50%, -50%) rotate(${d.ang}deg)` }} />
+              <div className="fd-guide-lbl" style={{ left: `${d.mid.x}%`, top: `${d.mid.y}%` }}>
+                {d.zone.name.replace(/ Concourse$/, "")} full &rarr; use {d.gate.name}
+              </div>
+            </React.Fragment>
+          ))}
+
+          {/* areas */}
+          {zones.map((z) => (
+            <button key={z.floor_zone_id} type="button"
+                    className={`fd-zone ${z.kind}${hover === z.floor_zone_id ? " on" : ""}`}
+                    style={{ left: `${z.x}%`, top: `${z.y}%`, borderColor: heat(z.occupancy_pct), boxShadow: `0 0 18px ${heat(z.occupancy_pct, 0.35)}` }}
+                    onMouseEnter={() => setHover(z.floor_zone_id)} onFocus={() => setHover(z.floor_zone_id)} onBlur={() => setHover(null)}
+                    aria-label={`${z.name}: ${z.people_count.toLocaleString()} of ${z.capacity.toLocaleString()} people, ${z.occupancy_pct}%`}>
+              <span className="nm">{z.name.replace(/ Concourse$/, "")}</span>
+              <span className="pc" style={{ color: heat(z.occupancy_pct) }}>{Math.round(z.occupancy_pct)}%</span>
+              <span className="pp">{z.people_count.toLocaleString()} / {z.capacity.toLocaleString()}</span>
+            </button>
+          ))}
+
+          {/* gates */}
+          {(gates || []).map((g, i) => {
+            const live = GATE_LIVE[g.live_status] || GATE_LIVE.open;
+            const oos = g.status && g.status !== "open";
+            return (
+              <div key={g.gate_id} className={`fd-gate${oos ? " oos" : ""}`}
+                   style={{ left: `${g.x}%`, top: `${g.y}%`, background: oos ? "#444" : (g.phase !== "idle" ? gateColor(gatePct(g)) : live.color) }}
+                   title={`${g.name}: ${oos ? "out of service" : live.label.toLowerCase()}${g.phase !== "idle" ? `, ${Math.round(gatePct(g))}% of capacity` : ""}`}>
+                {i + 1}
+                {g.phase !== "idle" && !oos && <span className="fd-gpct" style={{ color: gateColor(gatePct(g)) }}>{Math.round(gatePct(g))}%</span>}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="fd-list">
+          {ranked.map((z) => (
+            <div key={z.floor_zone_id} className={`fd-row${hover === z.floor_zone_id ? " on" : ""}`}
+                 onMouseEnter={() => setHover(z.floor_zone_id)} onMouseLeave={() => setHover(null)}>
+              <div className="fd-row-top">
+                <span>{z.name}</span>
+                <b style={{ color: heat(z.occupancy_pct) }}>{Math.round(z.occupancy_pct)}%</b>
+              </div>
+              <div className="fd-bar"><i style={{ width: `${Math.min(100, z.occupancy_pct)}%`, background: heat(z.occupancy_pct) }} /></div>
+              <div className="fd-row-sub">{z.people_count.toLocaleString()} of {z.capacity.toLocaleString()}{z.severity !== "ok" ? ` \u00B7 ${z.severity === "critical" ? "critical" : "busy"}` : ""}</div>
+              {guideFor[z.floor_zone_id] && (
+                <div className="fd-row-go">Over {GATE_CLOSE}%: send people to {guideFor[z.floor_zone_id].gate.name}, the nearest gate</div>
+              )}
+            </div>
+          ))}
+          <div className="fd-legend">
+            <div className="fd-scale" />
+            <div className="fd-scale-l"><span>Empty</span><span>{GATE_WARN}% busy</span><span>{GATE_CLOSE}% closes</span></div>
+            <div className="fd-keys">
+              <span><i style={{ background: GATE_LIVE.open.color }} />Open</span>
+              <span><i style={{ background: GATE_LIVE.restricted.color }} />Busy</span>
+              <span><i style={{ background: GATE_LIVE.closed.color }} />Closed</span>
+              <span><i className="redir-key" />Redirected crowd</span>
+              <span><i className="guide-key" />Too full: way to nearest gate</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VenueFloor({ venues, hour, precomputed }) {
+  if (!venues?.length) return null;
+
+  // Whatever is happening now, or next. A finished event is history.
+  const live = venues.find((v) => hour >= v.start_hour && hour <= v.end_hour);
+  const next = venues
+    .filter((v) => v.start_hour > hour)
+    .sort((a, b) => a.start_hour - b.start_hour)[0];
+  // An event whose gates are busy (people arriving, or leaving after it ends) matters
+  // more than one that is only scheduled: the crowd is physically there.
+  const busy = venues.find((x) => (x.gates || []).some((g) => g.phase && g.phase !== "idle"));
+  const v = busy || live || next || venues[venues.length - 1];
+  if (!v) return null;
+
+  const running = live && live.event_id === v.event_id;
+  const emptying = !running && hour > v.end_hour;
+
+  return (
+    <div className="card navsec" id="venue-section">
+      <div className="card-head">
+        <h3 className="display">Venue Floor</h3>
+        <span className="meta">
+          {running ? "Underway" : emptying ? "Ended · emptying out" : `Starts in ${v.start_hour - hour}h`}
+        </span>
+      </div>
+
+      <div style={{ padding: "12px 18px 18px" }}>
+        <div className="vrow">
+          <div>
+            <div className="vname">{v.name}</div>
+            <div className="vsub">{v.venue_name}</div>
+          </div>
+        </div>
+
+        <GatePanel zoneId={v.zone_id} gates={v.gates} held={v.gates_held || 0} />
+        <FloorDensity zoneId={v.zone_id} hour={hour} staticData={precomputed?.density} gates={v.gates} />
+        <ExitRedirect zoneId={v.zone_id} hour={hour} staticData={precomputed?.exitRedirect} />
+      </div>
+    </div>
+  );
+}
+
+/* Weather twin.
+   Live weather and public reports, pushed through the learned model of how weather
+   moves through the city (engine/weather_twin.py), with quick what-ifs. The full,
+   interactive version with the storm on the map lives in the twin (?weather=whatif). */
+const WX_QUICK = [
+  { label: "Heavy monsoon", body: { rain_mm_h: 25, duration_h: 3, temp_c: 27, wind_kmh: 35 } },
+  { label: "Cloudburst", body: { rain_mm_h: 80, duration_h: 2, temp_c: 26, wind_kmh: 45, center: { zone_id: "Z04" }, radius_km: 3 } },
+  { label: "Heatwave", body: { rain_mm_h: 0, duration_h: 5, temp_c: 44, wind_kmh: 12 } },
+  { label: "Cyclone", body: { rain_mm_h: 45, duration_h: 6, temp_c: 27, wind_kmh: 110 } },
+];
+
+function WxRange({ q, fmt }) {
+  return <span className="wx-range">likely {fmt(q.p10)}&ndash;{fmt(q.p90)}</span>;
+}
+
+function WxEffects({ list }) {
+  const title = { 1: "Weather hits places", 2: "The network responds", 3: "People and businesses" };
+  let last = 0;
+  return (
+    <div className="wx-fx">
+      {list.map((e) => {
+        const head = e.order !== last ? <div className="wx-ord" key={`h${e.order}`}>{e.order}{["st", "nd", "rd"][e.order - 1]} order &middot; {title[e.order]}</div> : null;
+        last = e.order;
+        return (
+          <React.Fragment key={e.id}>
+            {head}
+            <div className={`wx-e o${e.order}${e.kind === "summary" ? " sum" : ""}`}>{e.text}</div>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlanBox({ plan }) {
+  if (!plan) return <div className="wx-sub" style={{ marginTop: 8 }}>Writing the operator plan...</div>;
+  const nugen = plan.source === "nugen";
+  return (
+    <div className="plan-box">
+      <div className="plan-head">
+        <span className="eyebrow dim">Operator plan</span>
+        <span className={`plan-src${nugen ? " nugen" : ""}`}
+              title={nugen ? "" : (plan.rejected ? `The aligned model's answer wasn't used: ${plan.rejected}` : "The Nugen-aligned model isn't configured on this server.")}>
+          {nugen ? `EventPulse model on Nugen${plan.confidence != null ? ` \u00B7 ${Math.round(plan.confidence)}% confident` : ""}` : "EventPulse playbook"}
+        </span>
+      </div>
+      <ol>{plan.actions.map((a, i) => <li key={i}>{a}</li>)}</ol>
+      {plan.attendee_message && <div className="plan-msg">Attendee message: {plan.attendee_message}</div>}
+    </div>
+  );
+}
+
+function WeatherTwin({ hour }) {
+  const [plan, setPlan] = useState(null);
+  const [simPlan, setSimPlan] = useState(null);
+  const [st, setSt] = useState(null);
+  const [social, setSocial] = useState(null);
+  const [err, setErr] = useState("");
+  const [sim, setSim] = useState(null);
+  const [simBusy, setSimBusy] = useState("");
+  const hourRef = React.useRef(hour);
+  hourRef.current = hour;
+
+  const load = useCallback(async () => {
+    try {
+      const [a, b] = await Promise.all([
+        fetch(`${API}/weather-twin/state?hour=${hourRef.current}`).then((r) => (r.ok ? r.json() : Promise.reject())),
+        fetch(`${API}/weather/social`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+      setSt(a); setSocial(b); setErr("");
+      fetch(`${API}/ai/plan?hour=${hourRef.current}`).then((r) => (r.ok ? r.json() : null)).then(setPlan).catch(() => {});
+    } catch (e) { setErr("The weather twin needs the live API (see DEPLOY.md)."); }
+  }, []);
+
+  useEffect(() => {
+    if (STATIC_MODE) { setErr("The weather twin needs the live API. Run the backend to see live weather and what-ifs."); return undefined; }
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, [load]);
+  // The clock moves every few seconds; follow it, but not on every tick.
+  useEffect(() => {
+    if (STATIC_MODE) return undefined;
+    const t = setTimeout(() => { load(); setSim(null); }, 1500);
+    return () => clearTimeout(t);
+  }, [hour, load]);
+
+  const runQuick = async (q) => {
+    setSimBusy(q.label);
+    try {
+      const r = await fetch(`${API}/weather-twin/simulate`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...q.body, hour, baseline: "live" }) });
+      const d = await r.json();
+      setSim(r.ok ? { label: q.label, d } : null);
+      if (!r.ok) setErr(d.detail || "The simulation failed.");
+      setSimPlan(null);
+      if (r.ok) fetch(`${API}/weather-twin/plan`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...q.body, hour, baseline: "live" }) }).then((x) => (x.ok ? x.json() : null)).then(setSimPlan).catch(() => {});
+    } catch (e) { setErr("Couldn't reach the API to simulate."); }
+    setSimBusy("");
+  };
+
+  const live = st && st.live;
+  const c = live && live.available ? live.city : null;
+  const fx = st ? st.effects.filter((e) => !e.folded) : [];
+  const counts = social && social.available ? social.counts_24h : null;
+  const n = (v) => Math.round(v).toLocaleString();
+
+  return (
+    <div className="card navsec" id="weather-section">
+      <div className="card-head">
+        <h3 className="display">Weather Twin</h3>
+        <a className="meta" href={`twin.html?hour=${hour}&weather=whatif`} target="_blank" rel="noopener">What-if on the map &#8599;</a>
+      </div>
+      <div className="wx-body">
+        {err && !st ? <div className="empty">{err}</div> : !st ? <div className="empty">Reading the live weather...</div> : (
+          <>
+            <div className="wx-top">
+              <div className="wx-now">
+                <span className="eyebrow dim">Now &middot; {live.source || "Open-Meteo"}</span>
+                {c ? (
+                  <>
+                    <div className="wx-t"><b>{Math.round(c.temp_c)}&deg;</b> {c.condition}</div>
+                    <div className="wx-sub">Feels like {Math.round(c.apparent_c)}&deg; &middot; rain {c.rain_mm_h_max} mm/h &middot; next 6 h {c.rain_next_6h_mm_max} mm ({Math.round(c.max_prob_next_6h)}%) &middot; gusts {Math.round(c.gust_kmh_max)} km/h</div>
+                  </>
+                ) : <div className="wx-sub">{live.error || "Live weather unavailable"}: assuming calm.</div>}
+              </div>
+              <div className="wx-now">
+                <span className="eyebrow dim">Public reports &middot; last 24 h</span>
+                {counts ? (
+                  <div className="wx-chips">
+                    {[["flooding", "Flooding"], ["transport", "Transport"], ["alert", "Alerts"], ["heat", "Heat"]].map(([k, t]) =>
+                      <span key={k} className={counts[k] ? "on" : ""}>{t} {counts[k] || 0}</span>)}
+                  </div>
+                ) : <div className="wx-sub">Couldn't reach Mastodon or Google News.</div>}
+                {social && social.items && social.items[0] && (
+                  <div className="wx-latest">
+                    Latest: {social.items[0].text.slice(0, 110)}{social.items[0].text.length > 110 ? "..." : ""}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <span className="eyebrow dim" style={{ display: "block", marginTop: 16 }}>What today's weather is doing, vs a normal day</span>
+            {fx.length ? <WxEffects list={fx.slice(0, 5)} /> :
+              <div className="wx-sub" style={{ marginTop: 6 }}>Nothing measurable: the weather isn't changing how the city moves right now.</div>}
+            <PlanBox plan={plan} />
+
+            <span className="eyebrow dim" style={{ display: "block", marginTop: 18 }}>What if? Simulated on a copy, compared with now</span>
+            <div className="wx-quick">
+              {WX_QUICK.map((q) => (
+                <button key={q.label} className={sim && sim.label === q.label ? "on" : ""} onClick={() => runQuick(q)} disabled={!!simBusy}>
+                  {simBusy === q.label ? "Simulating..." : q.label}
+                </button>
+              ))}
+            </div>
+            {sim && (
+              <div className="wx-sim">
+                <div className="wx-kpis">
+                  <div><small>Visitors stranded</small><b>{n(sim.d.city.stranded.p50)}</b><WxRange q={sim.d.city.stranded} fmt={n} /></div>
+                  {sim.d.venue && <div><small>{sim.d.venue.venue_name} empties in</small><b>{sim.d.venue.hours_to_clear.p50.toFixed(1)} h</b>
+                    <WxRange q={sim.d.venue.hours_to_clear} fmt={(v) => `${v.toFixed(1)} h`} /></div>}
+                  <div><small>Worst flood risk</small><b>{Math.round(sim.d.city.max_flood_pct.p50)}%</b><WxRange q={sim.d.city.max_flood_pct} fmt={(v) => `${Math.round(v)}%`} /></div>
+                  <div><small>Links cut to 60% or less</small><b>{Math.round(sim.d.city.links_disrupted.p50)}</b><WxRange q={sim.d.city.links_disrupted} fmt={(v) => String(Math.round(v))} /></div>
+                </div>
+                <PlanBox plan={simPlan} />
+                <WxEffects list={sim.d.effects.filter((e) => !e.folded).slice(0, 8)} />
+                <div className="wx-sub" style={{ marginTop: 8 }}>{sim.d.draws} simulated runs; &ldquo;likely&rdquo; is the 10th&ndash;90th percentile. The live system is not changed.</div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Nugen connection, checked live by the server (GET /ai/nugen/verify). Shows only
+   what Nugen actually confirmed for this deployment's key. */
+function NugenBadge() {
+  const [v, setV] = useState(null);
+  useEffect(() => {
+    if (STATIC_MODE) return undefined;
+    const load = () => fetch(`${API}/ai/nugen/verify`).then((r) => (r.ok ? r.json() : null)).then(setV).catch(() => {});
+    load();
+    const id = setInterval(load, 300000);
+    return () => clearInterval(id);
+  }, []);
+  if (!v || !v.has_key) return null;
+  const ok = v.accepted === true;
+  const title = ok
+    ? `Nugen confirmed this server's API key (${v.key}) ${new Date(v.checked_at * 1000).toLocaleTimeString()}.`
+      + (v.documents ? ` Documents on Nugen: ${v.documents.map((d) => `${d.name} ${d.status}`).join(", ")}.` : "")
+      + (v.benchmark ? ` Benchmark ${v.benchmark.status} (${v.benchmark.samples} samples).` : "")
+      + (v.alignment ? ` Latest alignment: ${v.alignment.status}.` : "")
+    : (v.reason || "Couldn't confirm the key with Nugen just now.");
+  return (
+    <a className={`nugen-badge${ok ? " ok" : ""}`} href="organizer.html#modelCard" title={title}>
+      <i aria-hidden="true" />{ok ? "Nugen \u00B7 API key accepted" : "Nugen \u00B7 checking"}
+    </a>
+  );
+}
+
+/* Social pulse.
+   What travellers, residents and the news are saying about the weather: Reddit
+   (r/mumbai, r/india), Mastodon hashtags and Google News, read for what they report,
+   which part of a trip they touch, the reaction in them and where (engine/social.py).
+   Trends build up from a rolling history; "emerging" is a kind of report running at
+   twice its usual rate in the last six hours. */
+const SOC_CATS = { flooding: "Flooding", transport: "Transport", alert: "Alerts", heat: "Heat", power: "Power", clear: "All clear" };
+const SOC_MOODS = { frustrated: "Frustrated", worried: "Worried", relieved: "Relieved", reporting: "Just reporting" };
+const SOC_FILTERS = [["all", "All"], ["traveller", "Travellers"], ["news", "News"], ["flooding", "Flooding"], ["transport", "Transport"], ["alert", "Alerts"], ["heat", "Heat"]];
+
+function ago(h) {
+  if (h == null) return "";
+  return h < 1 ? `${Math.max(1, Math.round(h * 60))} min ago` : h < 48 ? `${Math.round(h)} h ago` : `${Math.round(h / 24)} d ago`;
+}
+
+function Spark({ b }) {
+  const max = Math.max(1, ...b);
+  return (
+    <span className="soc-spark" aria-hidden="true">
+      {b.map((v, i) => <i key={i} style={{ height: `${Math.max(8, (v / max) * 100)}%`, opacity: v ? 1 : 0.25 }} />)}
+    </span>
+  );
+}
+
+function SocialPulse() {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [more, setMore] = useState(false);
+
+  useEffect(() => {
+    if (STATIC_MODE) { setErr("Social signals need the live API."); return undefined; }
+    const load = () => fetch(`${API}/weather/social`).then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((x) => { setD(x); setErr(""); }).catch(() => setErr("Couldn't load social signals."));
+    load();
+    const id = setInterval(load, 120000);
+    return () => clearInterval(id);
+  }, []);
+
+  const items = d ? d.items.filter((i) => filter === "all" || i.kind === filter || i.categories.includes(filter)) : [];
+  const scanned = d ? Object.values(d.fetched || {}).reduce((a, b) => a + b, 0) : 0;
+  const people = d ? Object.values(d.moods_48h || {}).reduce((a, b) => a + b, 0) : 0;
+  const trends = d ? Object.entries(d.trends || {}).filter(([, t]) => t.buckets.some((v) => v)) : [];
+
+  return (
+    <div className="card navsec" id="social-section">
+      <div className="card-head">
+        <h3 className="display">Social Pulse</h3>
+        <span className="meta">{d ? `Reddit · Mastodon · News · ${scanned.toLocaleString()} scanned, ${d.total} about the weather` : "Reddit · Mastodon · News"}</span>
+      </div>
+      <div className="soc-body">
+        {err && !d ? <div className="empty">{err}</div> : !d ? <div className="empty">Reading public posts...</div> : (
+          <>
+            <span className="eyebrow dim">Emerging conditions &middot; last 6 h</span>
+            {d.emerging.length ? d.emerging.map((e) => (
+              <div className="soc-emerge" key={e.category}>
+                <b>{SOC_CATS[e.category]} reports are up: {e.reports_6h} in 6 h, {e.times_usual}&times; the usual rate</b>
+                {e.places.length > 0 && <span>Around {e.places.join(", ")}</span>}
+                {e.example && <q>{e.example}</q>}
+              </div>
+            )) : <div className="soc-sub">Nothing emerging: no kind of weather report is running above its usual rate right now.</div>}
+
+            <div className="soc-grid">
+              <div>
+                <span className="eyebrow dim">Trends &middot; 2 days, 6 h steps</span>
+                {trends.length ? trends.map(([c, t]) => (
+                  <div className="soc-trend" key={c}>
+                    <span className="n">{SOC_CATS[c]}</span>
+                    <Spark b={t.buckets} />
+                    <span className={`dir ${t.direction}`}>{t.direction === "rising" ? "▲ rising" : t.direction === "falling" ? "▼ falling" : "steady"}</span>
+                    <span className="c">{t.last_12h} in 12 h</span>
+                  </div>
+                )) : <div className="soc-sub">No weather reports in the last two days.</div>}
+              </div>
+              <div>
+                <span className="eyebrow dim">Traveller reactions &middot; 48 h</span>
+                {people ? (
+                  <>
+                    <div className="soc-mood">
+                      {Object.entries(d.moods_48h).filter(([, n]) => n).map(([m, n]) => (
+                        <i key={m} className={m} style={{ flex: n }} title={`${SOC_MOODS[m]}: ${n}`}>{SOC_MOODS[m]} {n}</i>
+                      ))}
+                    </div>
+                    <div className="soc-topics">
+                      {Object.entries(d.topics_48h).filter(([, n]) => n).map(([t, n]) => <span key={t}>{t} {n}</span>)}
+                    </div>
+                  </>
+                ) : <div className="soc-sub">No weather posts from travellers in the last 48 h. {d.by_source.Reddit + d.by_source.Mastodon} older ones are in the feed.</div>}
+              </div>
+            </div>
+
+            <div className="soc-filters" role="group" aria-label="Filter posts">
+              {SOC_FILTERS.map(([k, t]) => <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{t}</button>)}
+            </div>
+            {items.length ? (more ? items : items.slice(0, 6)).map((i) => (
+              <div className={`soc-item ${i.kind}`} key={i.id}>
+                <div className="top">
+                  <span className={`src ${i.source.toLowerCase()}`}>{i.source}</span>
+                  <span className="ch">{i.channel}</span>
+                  <span className="age">{ago(i.age_h)}</span>
+                  {i.mood && i.mood !== "reporting" && <span className={`mood ${i.mood}`}>{SOC_MOODS[i.mood]}</span>}
+                </div>
+                <div className="t">{i.text}</div>
+                <div className="tags">
+                  {i.categories.map((c) => <span key={c}>{SOC_CATS[c]}</span>)}
+                  {i.topics.map((t) => <span key={t} className="topic">{t}</span>)}
+                  {i.places.map((p) => <span key={p.zone_id} className="place">{p.place}</span>)}
+                </div>
+              </div>
+            )) : <div className="soc-sub">Nothing in this filter.</div>}
+            {items.length > 6 && <button className="soc-more" onClick={() => setMore((m) => !m)}>{more ? "Show fewer" : `Show all ${items.length}`}</button>}
+            <div className="soc-sub" style={{ marginTop: 10 }}>
+              Public posts and headlines only; nothing is posted or stored beyond what the feed needs. Fresh flooding and
+              transport reports near a zone feed the weather twin's flood and disruption estimates.
+              {d.errors && d.errors.length ? ` Some sources didn't answer this time (${d.errors.length}); they're retried every 10 minutes.` : ""}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* City digital twin. The real 3D map lives in twin.html and is embedded here so
+   it sits above the pressure map. The dashboard owns the clock and the selected
+   zone: it tells the frame the hour and the selection, and the frame reports
+   back when someone clicks a tower. Messages are only accepted from this origin
+   and from this frame. */
+function TwinEmbed({ hour, selected, onPick, pos }) {
+  const frame = React.useRef(null);
+  const ready = React.useRef(false);
+  const latest = React.useRef({ hour, selected, onPick });
+  latest.current = { hour, selected, onPick, pos };
+  // Fixed for the life of the frame; changing the src would reload the map on every tick.
+  const [src] = useState(() => `twin.html?embed=1&hour=${hour}`);
+
+  const post = (msg) => {
+    const w = frame.current && frame.current.contentWindow;
+    if (w && ready.current) w.postMessage(msg, location.origin);
+  };
+
+  useEffect(() => {
+    const onMsg = (e) => {
+      if (e.origin !== location.origin) return;
+      if (!frame.current || e.source !== frame.current.contentWindow) return;
+      const m = e.data || {};
+      if (m.type === "ready") {
+        ready.current = true;
+        post({ type: "visible", on: visible.current });
+        post({ type: "hour", hour: latest.current.hour });
+        post({ type: "select", id: latest.current.selected });
+        const g = EPLocate.get();
+        post({ type: "you", lat: g.lat, lng: g.lng, accuracy: g.accuracy, heading: g.heading, speed: g.speed });
+      } else if (m.type === "select" && m.id) {
+        latest.current.onPick(m.id);
+      }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  // Tell the frame when it is out of view, so it stops animating what nobody can see.
+  const visible = React.useRef(true);
+  useEffect(() => {
+    if (!frame.current || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([e]) => {
+      visible.current = e.isIntersecting;
+      post({ type: "visible", on: e.isIntersecting });
+    });
+    io.observe(frame.current);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => { post({ type: "hour", hour }); }, [hour]);
+  useEffect(() => { post({ type: "select", id: selected }); }, [selected]);
+  // Stream the position straight from the locator: the page's own `pos` only changes every
+  // ~30 m, too coarse for a map that follows you as you walk.
+  useEffect(() => EPLocate.onChange((g) => post({ type: "you", lat: g.lat, lng: g.lng, accuracy: g.accuracy,
+    heading: g.heading, speed: g.speed })), []);
+
+  return (
+    <div className="card navsec" id="twin-section">
+      <div className="card-head">
+        <h3 className="display">City Digital Twin</h3>
+        <a className="meta" href={`twin.html?hour=${hour}`} target="_blank" rel="noopener"
+           style={{ textDecoration: "none" }}>Open full view &#8599;</a>
+      </div>
+      <iframe ref={frame} className="twin-frame" src={src} title="City digital twin: 3D map of zone pressure"
+              loading="eager" />
+    </div>
+  );
+}
+
+/* Live KPI strip. Numbers glide to each new reading instead of jumping, and
+   every figure says how far it moved since the previous tick, so a change is
+   noticed as it happens rather than found by comparing screenshots. */
+function useTween(target, ms = 700) {
+  const [val, setVal] = useState(target);
+  const cur = React.useRef(target);
+
+  useEffect(() => {
+    if (typeof target !== "number" || !isFinite(target) || typeof cur.current !== "number") {
+      cur.current = target; setVal(target); return undefined;
+    }
+    const from = cur.current, t0 = performance.now();
+    let raf;
+    const tick = (now) => {
+      const t = Math.min(1, (now - t0) / ms);
+      const v = from + (target - from) * (1 - Math.pow(1 - t, 3));
+      cur.current = v; setVal(v);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+
+  return val;
+}
+
+// `badWhenUp`: whether a rise is bad news (occupancy, alerts) or good (beds free).
+function Kpi({ label, value, prev, decimals = 0, suffix, unit, cls, badWhenUp, note }) {
+  const shown = useTween(typeof value === "number" ? value : null);
+  const numeric = typeof value === "number";
+  const d = numeric && typeof prev === "number" ? value - prev : null;
+  const flat = d == null || Math.abs(d) < Math.pow(10, -decimals) / 2;
+
+  let delta = "\u00A0", dcls = "";
+  if (!flat) {
+    delta = `${d > 0 ? "\u25B2" : "\u25BC"} ${Math.abs(d).toLocaleString(undefined, { maximumFractionDigits: decimals, minimumFractionDigits: decimals })}${unit ? " " + unit : ""}`;
+    dcls = (d > 0) === !!badWhenUp ? "bad" : "good";
+  } else if (d != null) delta = "\u2014 steady";
+
+  return (
+    <div className="kpi">
+      <div className={`num v ${cls || ""}`}>
+        {numeric ? (typeof shown === "number" ? shown : value).toLocaleString(undefined, { maximumFractionDigits: decimals, minimumFractionDigits: decimals }) : value}
+        {suffix}
+      </div>
+      <div className="k">{label}</div>
+      <div className={`delta ${dcls}`} title={note || ""}>
+        {note ? (flat ? note : `${note} \u00B7 ${delta}`) : delta}
+      </div>
+    </div>
+  );
+}
+
+// Gate KPIs cover every gate with crowd flow right now (queueing to get in, or
+// pushing to get out), across all venues. Looking only at events that are
+// "running" would miss the busiest moment, the exit surge just after one ends.
+function venueKpis(venues) {
+  const active = [], outOfService = new Map();
+  (venues || []).forEach((v) => {
+    const gs = v.gates || [];
+    const flowing = gs.filter((g) => g.phase && g.phase !== "idle");
+    if (!flowing.length) return;
+    flowing.forEach((g) => active.push({ ...g, venue: v.venue_name }));
+    // A gate an organiser has taken out of service is not flowing, but during a
+    // surge it is exactly the one that matters, so it counts against "open".
+    gs.filter((g) => g.status && g.status !== "open").forEach((g) => outOfService.set(g.gate_id, g));
+  });
+  if (!active.length) return { idle: true };
+  const busiest = active.slice().sort((a, b) => gatePct(b) - gatePct(a))[0];
+  const venueNames = [...new Set(active.map((g) => g.venue))];
+  const oos = outOfService.size;
+  const where = venueNames.length === 1 ? venueNames[0] : `${venueNames.length} venues`;
+  return {
+    idle: false, busiest,
+    open: active.filter((g) => g.live_status !== "closed").length, total: active.length + oos,
+    where: oos ? `${oos} out of service` : where,
+  };
+}
+
+function Kpis({ summary, prev, venues, hour }) {
+  // Remember the previous hour's gate reading, so the change indicator compares
+  // like with like (the `venues` prop only ever holds the current hour).
+  const memo = React.useRef({ hour: null, now: null, before: null });
+  const vk = venueKpis(venues);
+  if (memo.current.hour !== hour) {
+    memo.current = { hour, now: vk, before: memo.current.now };
+  } else {
+    memo.current.now = vk;
+  }
+  const pv = memo.current.before;
+  const WARN_PCT = 75;
+
+  return (
+    <div className="kpis" aria-live="off">
+      <Kpi label="Citywide occupancy" value={summary.citywide_occupancy_pct} prev={prev && prev.citywide_occupancy_pct}
+           decimals={1} suffix="%" unit="pts" cls={summary.citywide_occupancy_pct >= WARN_PCT ? "warn" : "good"} badWhenUp />
+      <Kpi label="Zones at capacity" value={summary.zones_saturated} prev={prev && prev.zones_saturated}
+           suffix={<small>/{summary.zones_total}</small>} cls={summary.zones_saturated ? "accent" : "good"} badWhenUp />
+      <Kpi label="Critical alerts" value={summary.alerts_critical} prev={prev && prev.alerts_critical}
+           cls={summary.alerts_critical ? "accent" : "good"} badWhenUp />
+      {vk.idle ? (
+        <Kpi label="Busiest gate load" value={"\u2014"} note="No crowd at the gates" />
+      ) : (
+        <Kpi label="Busiest gate load" value={Math.round(gatePct(vk.busiest))} prev={pv && !pv.idle ? Math.round(gatePct(pv.busiest)) : undefined}
+             suffix="%" cls={gatePct(vk.busiest) >= GATE_CLOSE ? "accent" : gatePct(vk.busiest) >= GATE_WARN ? "warn" : "good"} badWhenUp note={vk.busiest.name} />
+      )}
+      {vk.idle ? (
+        <Kpi label="Gates open" value={"\u2014"} note="Venues idle" />
+      ) : (
+        <Kpi label="Gates open" value={vk.open} prev={pv && !pv.idle ? pv.open : undefined}
+             suffix={<small>/{vk.total}</small>} cls={vk.open === vk.total ? "good" : "warn"} note={vk.where} />
+      )}
+    </div>
+  );
+}
+
+function SkeletonWall() {
+  return (
+    <div>
+      <div className="kpis">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div className="kpi" key={i}>
+            <div className="sk" style={{ height: 40, width: 120 }} />
+            <div className="sk" style={{ height: 12, width: 90, marginTop: 10 }} />
+          </div>
+        ))}
+      </div>
+      <div className="body">
+        <main className="stage">
+          <div className="sk" style={{ height: 260, marginBottom: 22 }} />
+          <div className="sk" style={{ height: 380 }} />
+        </main>
+        <aside className="rail">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div className="sk" key={i} style={{ height: 70, marginBottom: 10 }} />
+          ))}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const attendeeRef = React.useRef(null);
+  const topRef = React.useRef(null);
+
+  // The visitor's position, asked for as soon as the page opens and followed as they move.
+  const [pos, setPos] = useState(null);
+  useEffect(() => {
+    EPLocate.mountBanner();
+    EPPresence.init();
+    let last = null;
+    const off = EPLocate.onChange((g) => {
+      if (g.lat == null) { last = null; setPos(null); return; }
+      // Ignore GPS jitter: only re-rank once they have really moved (about 30 m).
+      if (last && EPLocate.distanceKm(last.lat, last.lng, g.lat, g.lng) < 0.03) return;
+      last = { lat: g.lat, lng: g.lng };
+      setPos({ lat: g.lat, lng: g.lng, accuracy: g.accuracy });
+    });
+    EPLocate.autoStart();
+    return off;
+  }, []);
+
+  const [navOn, setNavOn] = useState("twin");
+  const clickedAt = React.useRef(0);
+  const goTo = (where) => {
+    const el = document.getElementById(`${where}-section`);
+    if (!el) return;
+    clickedAt.current = Date.now();          // the scroll passes other sections; don't flicker through them
+    setNavOn(where);
+    scrollToSection(el);
+  };
+
+  // Keep the header's highlight on the section you're reading: the last one whose
+  // top has passed just under the sticky header. At the very bottom of the page the
+  // last section wins even if it is too short to reach that line.
+  useEffect(() => {
+    const onScroll = () => {
+      if (Date.now() - clickedAt.current < 900) return;
+      const bar = document.querySelector(".topbar");
+      const line = (bar && getComputedStyle(bar).position === "sticky" ? bar.offsetHeight : 0) + 80;
+      let on = NAV_SECTIONS[0].id;
+      NAV_SECTIONS.forEach((n) => {
+        const el = document.getElementById(`${n.id}-section`);
+        if (el && el.getBoundingClientRect().top <= line) on = n.id;
+      });
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) on = NAV_SECTIONS[NAV_SECTIONS.length - 1].id;
+      setNavOn(on);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  const [hour, setHour] = useState(DEMO_START_HOUR);
+  const [playing, setPlaying] = useState(true);
+
+  const [zones, setZones] = useState([]);
+  const [forecasts, setForecasts] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [prevSummary, setPrevSummary] = useState(null);
+  const summaryRef = React.useRef(null);
+  const [transport, setTransport] = useState([]);
+  const [hotels, setHotels] = useState([]);
+  const [events, setEvents] = useState(null);
+  const [venues, setVenues] = useState([]);
+  const [reroutes, setReroutes] = useState({});
+  const [precomputed, setPrecomputed] = useState(null);
+  const [sims, setSims] = useState(null);
+  const [bench, setBench] = useState(null);
+
+  const [selected, setSelected] = useState(null);
+  const [recs, setRecs] = useState(null);
+  const [log, setLog] = useState([]);
+  const [freshIds, setFreshIds] = useState(() => new Set());
+  const [err, setErr] = useState(null);
+
+  const seenIds = React.useRef(new Set());
+  const firstLoad = React.useRef(true);
+  const manualPick = React.useRef(false);
+
+  const pick = (id) => { manualPick.current = true; setSelected(id); };
+
+  const load = useCallback(async (h) => {
+    try {
+      let z, f, a, s, t, ht, ev, vn;
+
+      if (STATIC_MODE) {
+        // Everything for this hour arrives in one file, including the ranking
+        // for every zone and the simulator's results across the slider range.
+        const bundle = await fetch(`data/hour-${h}.json`).then((r) => r.json());
+        ({ zones: z, forecast: f, alerts: a, summary: s,
+           transport: t, hotels: ht, events: ev } = bundle);
+        setVenues(bundle.venues || []);
+        setReroutes(bundle.reroutes || {});
+        setPrecomputed({
+          recs: bundle.recommendations,
+          density: bundle.density || {},
+          exitRedirect: bundle.exit_redirect || {},
+          reverseUber: bundle.reverse_uber || {},
+          incentives: bundle.incentives || [],
+        });
+      } else {
+        [z, f, a, s, t, ht, ev, vn] = await Promise.all([
+          fetch(`${API}/zones?hour=${h}`).then((r) => r.json()),
+          fetch(`${API}/forecast?hour=${h}`).then((r) => r.json()),
+          fetch(`${API}/alerts?hour=${h}`).then((r) => r.json()),
+          fetch(`${API}/summary?hour=${h}`).then((r) => r.json()),
+          fetch(`${API}/transport?hour=${h}`).then((r) => r.json()),
+          fetch(`${API}/hotels?hour=${h}`).then((r) => r.json()),
+          fetch(`${API}/events?hour=${h}`).then((r) => r.json()),
+          fetch(`${API}/venues?hour=${h}`).then((r) => r.json()),
+        ]);
+        setVenues(vn || []);
+        // Live mode has no precomputed reroutes; the panel fetches per link.
+        setReroutes({});
+      }
+
+      const keyOf = (x) => `${x.zone_id}|${x.metric}|${x.severity}`;
+      const arrived = a.filter((x) => !seenIds.current.has(keyOf(x))).map(keyOf);
+      a.forEach((x) => seenIds.current.add(keyOf(x)));
+
+      if (arrived.length && !firstLoad.current) {
+        setFreshIds(new Set(arrived));
+        setTimeout(() => setFreshIds(new Set()), 2200);
+
+        arrived.slice(0, 2).forEach((key) => {
+          const hit = a.find((x) => keyOf(x) === key);
+          if (!hit) return;
+          setLog((l) => [{
+            kind: "alert",
+            title: hit.severity === "critical" ? "Critical threshold crossed" : "Pressure rising",
+            body: hit.message,
+            metric: `${hit.current_pct.toFixed(0)}% capacity`,
+            hour: h,
+          }, ...l].slice(0, 8));
+        });
+      }
+      firstLoad.current = false;
+
+      setZones(z); setForecasts(f); setAlerts(a);
+      setPrevSummary(summaryRef.current); summaryRef.current = s; setSummary(s);
+      setTransport(t); setHotels(ht); setEvents(ev);
+      setErr(null);
+    } catch (e) {
+      setErr(e.message || "Cannot reach the API");
+    }
+  }, []);
+
+  useEffect(() => { load(hour); }, [hour, load]);
+
+  // Follow the active intake point. While the venue has room it is the focus;
+  // once full it can take nobody, so the hub steps outward to the nearest zone
+  // that can, and destinations re-rank from there.
+  useEffect(() => {
+    if (manualPick.current || !zones.length) return;
+    const isFull = (z) => Math.round(z.occupancy_pct) >= 100;
+    const byPressure = [...zones].sort((a, b) => b.occupancy_pct - a.occupancy_pct);
+    const hottest = byPressure[0];
+
+    let hub = hottest;
+    if (hottest && isFull(hottest)) {
+      const open = zones.filter((z) => !isFull(z))
+        .sort((a, b) => a.distance_to_venue_km - b.distance_to_venue_km);
+      hub = open[0] || hottest;
+    }
+    if (hub && hub.id !== selected) setSelected(hub.id);
+  }, [zones, selected]);
+
+  useEffect(() => {
+    if (!playing) return;
+    const id = setInterval(() => {
+      setHour((h) => (h >= LAST_HOUR ? (setPlaying(false), h) : h + 1));
+    }, TICK_MS);
+    return () => clearInterval(id);
+  }, [playing]);
+
+  // Simulations are the bulk of the data but only one zone's are ever shown,
+  // so they live in their own file and load when a zone is selected.
+  useEffect(() => {
+    if (!STATIC_MODE || !selected) { setSims(null); return; }
+    let cancelled = false;
+    fetch(`data/sim-${hour}-${selected}.json`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setSims(d); })
+      .catch(() => { if (!cancelled) setSims(null); });
+    return () => { cancelled = true; };
+  }, [selected, hour]);
+
+  useEffect(() => {
+    if (!selected) { setRecs(null); return; }
+
+    if (STATIC_MODE) {
+      setRecs(precomputed?.recs?.[selected] || null);
+      return;
+    }
+    fetch(`${API}/recommendations/${selected}?hour=${hour}`)
+      .then((r) => r.json()).then(setRecs).catch(() => setRecs(null));
+  }, [selected, hour, precomputed]);
+
+  useEffect(() => {
+    const url = STATIC_MODE ? "data/meta.json" : `${API}/ml/benchmark`;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setBench(STATIC_MODE ? (d ? d.benchmark : null) : d))
+      .catch(() => setBench(null));
+  }, []);
+
+  if (err) {
+    return (
+      <div className="status">
+        <strong>The API isn't responding.</strong><br /><br />
+        Start it from the backend folder:<br /><br />
+        <code>py generate_city.py</code><br />
+        <code>py -m uvicorn api:app --reload</code><br /><br />
+        Then reload this page.
+      </div>
+    );
+  }
+
+  const hubZone = zones.find((z) => z.id === selected);
+  const hubName = hubZone ? hubZone.name : selected;
+
+  return (
+    <div>
+      <div className="topbar">
+      <header className="mast">
+        <div className="brand">
+          <img className="mark" src="logo.svg" alt="" />
+          <div>
+            <div className="name">EVENTPULSE</div>
+            <div className="sub">Orchestration Engine</div>
+          </div>
+        </div>
+
+        <nav aria-label="Dashboard sections">
+          <button onClick={() => { window.location.href = "home.html"; }}>Home</button>
+          {NAV_SECTIONS.map((n) => (
+            <button key={n.id} className={navOn === n.id ? "on" : ""} aria-current={navOn === n.id ? "true" : undefined}
+                    onClick={() => goTo(n.id)}>{n.label}</button>
+          ))}
+        </nav>
+
+        <div className="right">
+          <NugenBadge />
+          <div className="clock">
+            <div className="lab">Event hour</div>
+            <div className="scrub">
+              <button className="play" onClick={() => setPlaying((p) => !p)}
+                      aria-label={playing ? "Pause the clock" : "Run the clock"}>
+                {playing ? "II" : "\u25B6"}
+              </button>
+              <input type="range" min="24" max={LAST_HOUR} value={hour}
+                     onChange={(e) => { setPlaying(false); setHour(Number(e.target.value)); }}
+                     aria-label="Event hour" />
+              <span className="hour">{dayLabel(hour)}</span>
+            </div>
+            <div className={`beat${playing ? " pulsing" : ""}`}>
+              <i aria-hidden="true" />{playing ? "Live" : "Paused"}
+            </div>
+          </div>
+        </div>
+      </header>
+      {summary && <Kpis summary={summary} prev={prevSummary} venues={venues} hour={hour} />}
+      </div>
+
+      {!summary ? <SkeletonWall /> : (
+        <>
+          <div className="body" ref={topRef}>
+              <main className="stage">
+                <TwinEmbed hour={hour} selected={selected} onPick={pick} pos={pos} />
+                <WeatherTwin hour={hour} />
+                <SocialPulse />
+
+                <div className="card navsec" id="pressure-section">
+                  <div className="card-head">
+                    <h3 className="display">Pressure Map</h3>
+                    <span className="meta">
+                      {summary.zones_saturated > 0
+                        ? `${summary.zones_saturated} of ${summary.zones_total} at capacity`
+                        : "All zones holding"}
+                    </span>
+                  </div>
+                  <PressureMap zones={zones} forecasts={forecasts} transport={transport}
+                               selected={selected} onSelect={pick} recs={recs} />
+                </div>
+
+                <VenueFloor venues={venues} hour={hour} precomputed={precomputed} />
+
+                <div className="duo" style={{ marginBottom: 22 }}>
+                  <AbsorptionGrid zones={zones} forecasts={forecasts}
+                                  selected={selected} onSelect={pick} />
+                  <div className="card">
+                    <div className="card-head">
+                      <span className="eyebrow">What-if engine</span>
+                    </div>
+                    <div style={{ padding: "4px 18px 18px" }}>
+                      {selected
+                        ? <Simulator zoneId={selected} zoneName={hubName} hour={hour}
+                                   sims={sims} />
+                        : <div className="empty">Select a zone to model a redirect.</div>}
+                    </div>
+                  </div>
+                </div>
+
+                <DisruptionScenarios hour={hour} />
+
+                <Recommendations data={recs} wide />
+              </main>
+
+              <aside className="rail">
+                <div className="sect">
+                  <span className="eyebrow">Predictive alerts</span>
+                  <h3 className="display" style={{ marginTop: 7 }}>Alerts</h3>
+                  <div className="lead">Most urgent first</div>
+
+                  {alerts.length === 0 && (
+                    <div className="empty">Nothing above threshold. Capacity is holding.</div>
+                  )}
+
+                  {alerts.map((a) => (
+                    <div key={a.id}
+                         className={`alert ${a.severity}${
+                           freshIds.has(`${a.zone_id}|${a.metric}|${a.severity}`) ? " fresh" : ""}`}
+                         onClick={() => pick(a.zone_id)}
+                         role="button" tabIndex={0}
+                         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && pick(a.zone_id)}>
+                      <div className="top">
+                        <span className="who">
+                          <span className={`sev ${a.severity}`} aria-hidden="true" />
+                          {a.title || a.zone_name}
+                        </span>
+                        <span className="pct">{a.current_pct.toFixed(0)}%</span>
+                      </div>
+                      <div className="msg">{a.message}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <ActivityLog entries={log} />
+                <IncentivesPanel hour={hour} staticData={precomputed?.incentives} />
+                <NextUp data={events} />
+                <TransportLoad links={transport} zones={zones} reroutes={reroutes} />
+                <Scorecard data={bench} />
+              </aside>
+          </div>
+
+          <section className="stage stays-section navsec" id="stays-section" ref={attendeeRef}
+                   style={{ borderTop: "1px solid var(--line)" }}>
+            <Stays hotels={hotels} pos={pos} venues={venues} />
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+</body>
+</html>

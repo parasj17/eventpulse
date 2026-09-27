@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="EventPulse">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF6A3D"/>
+      <stop offset="0.55" stop-color="#FF3B1F"/>
+      <stop offset="1" stop-color="#C8193C"/>
+    </linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#g)"/>
+  <rect x="2" y="2" width="60" height="30" rx="16" fill="url(#s)"/>
+  <!-- crowd pulse: calm, a surge, then balanced again -->
+  <polyline points="10,36 20,36 25,27 30,46 36,16 41,36 46,36" fill="none" stroke="#fff" stroke-width="4.6"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="51.5" cy="36" r="4.3" fill="#fff"/>
+  <circle cx="51.5" cy="36" r="7.6" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="2"/>
+</svg>

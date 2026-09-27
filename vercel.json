@@ -1,0 +1,353 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "",
+  "outputDirectory": "frontend",
+  "cleanUrls": false,
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "backend/**",
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "headers": [
+    {
+      "source": "/data/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/vendor/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/home.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/home.html"
+    },
+    {
+      "source": "/ai",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/ai/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/alerts",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/alerts/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/attendee",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/attendee/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/auth",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/clock",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/clock/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/copilot",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/copilot/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/density",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/density/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/docs",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/docs/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/events",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/events/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/exit-redirect",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/exit-redirect/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/forecast",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/forecast/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/gates",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/gates/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/history",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/history/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/hotels",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/hotels/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/incentives",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/incentives/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/ml",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/ml/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/openapi.json/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/organizer",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/organizer/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/partner",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/partner/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/presence",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/presence/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/recommendations",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/recommendations/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/redoc",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/redoc/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/register",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/register/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/reroute",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/reroute/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/restaurants",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/restaurants/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/reverse-uber",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/reverse-uber/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/routes",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/routes/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/scenarios",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/scenarios/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/simulate",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/simulate/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/status",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/status/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/summary",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/summary/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/transport",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/transport/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/venues",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/venues/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/weather",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/weather/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/weather-twin",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/weather-twin/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/zones",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/zones/:path*",
+      "destination": "/api/index"
+    }
+  ]
+}

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EventPulse Partner API</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<style>
+  :root {
+    --bg: #0A0A0A; --panel: #101010; --panel-hi: #171717; --line: #242424;
+    --ink: #F2F2F2; --ink-dim: #A0A0A0; --ink-faint: #6A6A6A; --accent: #FF3B1F; --good: #00C46A; --blue: #4DA3FF;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  a { color: var(--blue); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 20px 80px; }
+  header { border-bottom: 1px solid var(--line); margin-bottom: 34px; }
+  header .wrap { display: flex; align-items: center; gap: 18px; height: 60px; padding-bottom: 0; }
+  .brand { font-weight: 800; font-size: 18px; color: var(--ink); text-decoration: none; }
+  .brand span { color: var(--accent); }
+  header nav { margin-left: auto; display: flex; gap: 18px; font-size: 14px; }
+  header nav a { color: var(--ink-dim); text-decoration: none; }
+  header nav a:hover { color: var(--ink); }
+  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); font-weight: 700; }
+  h1 { font-size: clamp(28px, 5vw, 38px); line-height: 1.15; margin: 8px 0 12px; }
+  h2 { font-size: 22px; margin: 44px 0 10px; }
+  h3 { font-size: 16px; margin: 26px 0 6px; }
+  p, li { color: var(--ink-dim); }
+  b, strong { color: var(--ink); }
+  .lead { font-size: 17px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--panel-hi); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: var(--ink); }
+  pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.55; background: #070707; border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; color: #DADADA; margin: 10px 0; }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+  .flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 22px 0; }
+  .flow div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .flow b { display: block; margin-bottom: 4px; }
+  .flow span { color: var(--ink-dim); font-size: 14px; }
+  .ep { display: flex; gap: 10px; align-items: baseline; margin: 28px 0 4px; flex-wrap: wrap; }
+  .ep .m { font: 700 12px ui-monospace, Menlo, monospace; padding: 2px 8px; border-radius: 5px; background: rgba(77,163,255,.15); color: var(--blue); }
+  .ep .m.post { background: rgba(0,196,106,.15); color: var(--good); }
+  .ep code { font-size: 14px; background: none; border: 0; padding: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink-faint); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  td { color: var(--ink-dim); }
+  .note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .note p { margin: 0; }
+  @media (max-width: 680px) { .flow { grid-template-columns: 1fr; } header nav a.hide-sm { display: none; } }
+  .brand { display: inline-flex; align-items: center; gap: 9px; }
+  .brand .wm { font-weight: inherit; white-space: nowrap; }
+  .logo-mark { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 3px 10px rgba(255,59,31,.35)); }
+  .brand-sub { color: var(--ink-faint, #6A6A6A); font-weight: 500; font-size: 13px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="home.html"><img class="logo-mark" src="logo.svg" alt="" /><b class="wm">Event<span>Pulse</span></b></a>
+    <nav aria-label="Main">
+      <a href="#start">Getting started</a>
+      <a class="hide-sm" href="#endpoints">Endpoints</a>
+      <a href="organizer.html">Organiser console</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="eyebrow">Partner API</div>
+  <h1>Give every ticket buyer a live way in and out</h1>
+  <p class="lead">
+    If you sell tickets or run an events app, you can add EventPulse without building anything crowd-related yourself.
+    Each buyer gets a personal live page that guides them to the quietest gate on the way in and the fastest way out
+    afterwards. You share the link in your own ticket email or app, so they don't need a new account.
+  </p>
+
+  <div class="flow">
+    <div><b>1. Get a key</b><span>The event's organiser creates one in the organiser console and gives it to you.</span></div>
+    <div><b>2. Register each buyer</b><span>When a ticket is sold, send us their email and the event. You get their live link back.</span></div>
+    <div><b>3. Share the link</b><span>Put it in the ticket confirmation or app. It updates by itself from arrival to the last exit.</span></div>
+  </div>
+
+  <h2 id="start">Getting started</h2>
+  <p>Every request carries the key in a header. Keep it on your server: a key in a web page or mobile app can be copied by anyone.</p>
+  <pre><code>curl -H "X-API-Key: ep_live_…" <span class="base">https://your-eventpulse-host</span>/partner/v1/events</code></pre>
+  <p><code>Authorization: Bearer ep_live_…</code> works too. All requests and responses are JSON.</p>
+
+  <h3>What a key can reach</h3>
+  <p>
+    A key acts for the organiser who created it and reaches only the events at that organiser's venues. It can read a buyer's
+    live status only if that buyer was registered with the same organiser's keys. The organiser can revoke a key at any time,
+    and it stops working at once. Links already given to buyers keep working.
+  </p>
+
+  <h2 id="endpoints">Endpoints</h2>
+
+  <div class="ep"><span class="m">GET</span><code>/partner/v1/events</code></div>
+  <p>Your events, soonest first, with where each is in its life right now (<code>upcoming</code>, <code>running</code> or <code>finished</code>).</p>
+  <pre><code>{
+  "hour": 96,
+  "events": [
+    { "event_id": "E5", "name": "Semi Final", "venue_zone_id": "Z01", "venue_name": "Central Stadium",
+      "lat": 19.0762, "lng": 72.878, "start_hour": 102, "end_hour": 105,
+      "expected_attendance": 52000, "state": "upcoming" }
+  ]
+}</code></pre>
+
+  <div class="ep"><span class="m post">POST</span><code>/partner/v1/attendees</code></div>
+  <p>Register a ticket buyer and get their personal live link. Call it when the ticket is sold. Calling again for the same email and event returns the same link, so retries are safe.</p>
+  <pre><code>curl -X POST -H "X-API-Key: ep_live_…" -H "Content-Type: application/json" \
+  -d '{"event_id": "E5", "email": "buyer@example.com"}' \
+  <span class="base">https://your-eventpulse-host</span>/partner/v1/attendees
+
+{
+  "attendee_token": "3f9c1a7b2e40",
+  "event_id": "E5",
+  "event_name": "Semi Final",
+  "live_link": "https://your-eventpulse-host/status.html?token=3f9c1a7b2e40",
+  "already_registered": false,
+  "email": "not_requested"
+}</code></pre>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>event_id</code></td><td>One of your events, from the list above.</td></tr>
+    <tr><td><code>email</code></td><td>The buyer's email. It identifies the registration; it is never returned by the status endpoints.</td></tr>
+    <tr><td><code>send_email</code></td><td>Optional, default <code>false</code>. Set <code>true</code> to have EventPulse email the link as well as returning it.</td></tr>
+  </table>
+  <p>The <code>email</code> field in the reply says what happened to the email: <code>not_requested</code>, <code>sent</code>,
+    <code>simulated</code> (no mail server configured on this deployment), <code>skipped</code> (one went out moments ago) or <code>failed</code>.</p>
+
+  <div class="ep"><span class="m">GET</span><code>/partner/v1/events/{event_id}</code></div>
+  <p>Live conditions for one event, if you want to show them inside your own app: the event state, each gate's status and load,
+    how full the venue is, the best exit once it ends, and <code>advice</code>, a sentence you can show your users as is.</p>
+  <pre><code>{
+  "event_id": "E5", "event_name": "Semi Final", "venue_name": "Central Stadium",
+  "event_state": "exiting", "hours_since_end": 0,
+  "inside": { "people": 31200, "capacity": 60000, "pct": 52.0 },
+  "gates": [ { "gate_id": "Z01-G2", "name": "North Gate", "live_status": "open", "load_ratio": 0.62, "out_of_service": false } ],
+  "best_exit": { "gate_id": "Z01-G2", "name": "North Gate", "live_status": "open", "reason": "…" },
+  "advice": "Semi Final has ended. Leave via North Gate: it is the quickest way out right now."
+}</code></pre>
+
+  <div class="ep"><span class="m">GET</span><code>/partner/v1/attendees/{attendee_token}</code></div>
+  <p>The same live view for one buyer you registered: exactly what their live link shows right now, plus <code>advice</code>.</p>
+
+  <h2>Limits and errors</h2>
+  <table>
+    <tr><th>Status</th><th>When</th></tr>
+    <tr><td><code>400</code></td><td>Something in the request is wrong, such as an invalid email. <code>detail</code> says what.</td></tr>
+    <tr><td><code>401</code></td><td>No key, or the key is wrong or revoked.</td></tr>
+    <tr><td><code>404</code></td><td>The event or buyer doesn't exist, or isn't reachable with this key. These look the same on purpose.</td></tr>
+    <tr><td><code>429</code></td><td>More than 120 requests a minute on one key. Wait a moment and retry.</td></tr>
+  </table>
+  <p>An organiser can have up to 10 active keys. Use one per app or environment, so one can be revoked without breaking the others.</p>
+
+  <h2>Privacy</h2>
+  <div class="note"><p>
+    The live link is the buyer's credential for their page, so treat it like the ticket: send it only to that buyer.
+    Buyers' positions are never available through this API. If a buyer chooses to share their location anonymously to help
+    map crowds, it only ever appears as counts for groups of three or more people.
+  </p></div>
+</main>
+<script>
+  // Show the address this deployment actually answers on.
+  const base = location.port === "8080" ? "http://127.0.0.1:8000" : location.origin;
+  document.querySelectorAll(".base").forEach((el) => { el.textContent = base; });
+</script>
+</body>
+</html>

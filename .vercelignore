@@ -1,0 +1,11 @@
+# secrets never leave this machine: on Vercel they are environment variables
+backend/.supabase
+backend/.nugen_key
+backend/.mail
+.env
+**/__pycache__
+backend/engine/model.pkl
+backend/data/nugen_corpus
+contracts
+plan.md
+Dockerfile

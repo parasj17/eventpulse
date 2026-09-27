@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Attendees — EventPulse</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<style>
+  :root {
+    --bg: #0A0A0A; --panel: #101010; --panel-hi: #171717; --line: #242424;
+    --ink: #F2F2F2; --ink-dim: #A0A0A0; --ink-faint: #6A6A6A;
+    --accent: #FF3B1F; --good: #00C46A; --warn: #D9A441;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; }
+  a { color: inherit; }
+  header { border-bottom: 1px solid var(--line); }
+  header .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+  .brand { font-weight: 800; text-decoration: none; }
+  .brand span { color: var(--accent); }
+  .right { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 14px; color: var(--ink-dim); }
+  .right a { text-decoration: none; }
+  main { padding: 40px 0 80px; }
+  h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -.5px; }
+  .lead { color: var(--ink-dim); margin: 0 0 26px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--ink-faint); margin: 34px 0 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -6px 0 20px; }
+  .tab { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--ink-faint); padding: 10px 14px; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  label { display: block; font-size: 13px; color: var(--ink-dim); margin: 0 0 6px; }
+  input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-hi);
+    color: var(--ink); font: inherit; font-size: 16px; margin-bottom: 16px; }
+  input:focus-visible, button:focus-visible, a:focus-visible, .ev input:focus-visible + .box { outline: 2px solid var(--ink-dim); outline-offset: 2px; }
+  .fine { color: var(--ink-faint); font-size: 12.5px; margin: -8px 0 16px; }
+  button, .btn { font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; border: 1px solid var(--accent);
+    background: var(--accent); color: #fff; border-radius: 10px; padding: 12px 20px; text-decoration: none; display: inline-block; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .btn.ghost, button.ghost { background: var(--panel-hi); border-color: var(--line); color: var(--ink); }
+  button.small { padding: 8px 14px; font-size: 13.5px; }
+  button.link { background: none; border: none; padding: 0; color: var(--ink-dim); text-decoration: underline; font-weight: 500; font-size: 14px; }
+  .msg { font-size: 14px; margin: 0 0 14px; min-height: 0; }
+  .msg.err { color: var(--accent); } .msg.ok { color: var(--good); }
+  .form-wide button[type=submit] { width: 100%; }
+
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; }
+  .row .nm { font-weight: 700; } .row .mt { color: var(--ink-dim); font-size: 13px; margin-top: 2px; }
+  .row .when { color: var(--ink-faint); font-size: 13px; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 700; color: var(--good); }
+  .empty { color: var(--ink-dim); font-size: 14px; padding: 4px 0; }
+
+  .cp { padding: 18px; }
+  .cp-lead { color: var(--ink-dim); font-size: 14px; margin-bottom: 12px; }
+  .cp-log { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; max-height: 420px; overflow-y: auto; }
+  .cp-log:empty { display: none; }
+  .cp-msg { padding: 10px 13px; border-radius: 10px; font-size: 15px; line-height: 1.5; max-width: 92%; }
+  .cp-msg.me { align-self: flex-end; background: #242424; }
+  .cp-msg.ai { align-self: flex-start; background: rgba(77,163,255,.09); border: 1px solid #244a73; }
+  .cp-msg small { display: block; margin-top: 6px; color: var(--ink-faint); font-size: 12px; }
+  .cp-nugen { margin-top: 8px; padding: 7px 9px; border-left: 2px solid #9b6bff; background: rgba(155,107,255,.08); font-size: 14px; }
+  .cp-nugen b { display: block; color: #c9b3ff; font-size: 12px; margin-bottom: 2px; }
+  .cp-nugen.wait, .cp-nugen.off { color: var(--ink-faint); font-size: 12.5px; background: none; }
+  .cp-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .cp-chips button { font-size: 13px; padding: 7px 12px; font-weight: 600; }
+  .cp-form { display: flex; gap: 10px; }
+  .cp-form input { flex: 1; margin: 0; }
+  .result { background: var(--panel); border: 1px solid var(--accent); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+  .result h3 { margin: 0 0 6px; font-size: 19px; }
+  .result .state { font-size: 14px; margin: 0 0 14px; }
+  .state.good { color: var(--good); } .state.warn { color: var(--warn); }
+  .mail { background: var(--panel-hi); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px;
+    font-size: 13px; color: var(--ink-dim); white-space: pre-wrap; word-break: break-word; margin: 0 0 16px; }
+  [hidden] { display: none !important; }
+  .brand { display: inline-flex; align-items: center; gap: 9px; }
+  .brand .wm { font-weight: inherit; white-space: nowrap; }
+  .logo-mark { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 3px 10px rgba(255,59,31,.35)); }
+  .brand-sub { color: var(--ink-faint, #6A6A6A); font-weight: 500; font-size: 13px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="home.html"><img class="logo-mark" src="logo.svg" alt="" /><b class="wm">Event<span>Pulse</span></b></a>
+  <div class="right" id="right"><a href="home.html">&larr; Home</a></div>
+</div></header>
+
+<main><div class="wrap">
+
+  <section id="authView">
+    <h1>Attendees</h1>
+    <p class="lead">Create an account or sign in to register for an event. We&rsquo;ll email you a live status link.</p>
+    <div class="card form-wide">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tabIn" aria-selected="true" aria-controls="formIn" type="button">Sign in</button>
+        <button class="tab" role="tab" id="tabUp" aria-selected="false" aria-controls="formUp" type="button">Create account</button>
+      </div>
+
+      <form id="formIn" novalidate>
+        <label for="inEmail">Email</label>
+        <input id="inEmail" type="email" autocomplete="username" placeholder="you@example.com" />
+        <label for="inPass">Password</label>
+        <input id="inPass" type="password" autocomplete="current-password" />
+        <div class="msg" id="inMsg" role="alert"></div>
+        <button type="submit" id="inBtn">Sign in</button>
+      </form>
+
+      <form id="formUp" novalidate hidden>
+        <label for="upName">Your name</label>
+        <input id="upName" type="text" autocomplete="name" placeholder="Asha Rao" />
+        <label for="upEmail">Email</label>
+        <input id="upEmail" type="email" autocomplete="email" placeholder="you@example.com" />
+        <label for="upPass">Password</label>
+        <input id="upPass" type="password" autocomplete="new-password" />
+        <p class="fine">At least 8 characters.</p>
+        <div class="msg" id="upMsg" role="alert"></div>
+        <button type="submit" id="upBtn">Create account</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="appView" hidden>
+    <h1 id="hello">Hello</h1>
+    <p class="lead">Register for an event below. You&rsquo;ll get an email with a link to its live status page.</p>
+
+    <div class="result" id="result" hidden>
+      <h3 id="rTitle"></h3>
+      <p class="state" id="rState"></p>
+      <div class="mail" id="rMail"></div>
+      <a class="btn" id="rGo" href="#">Open my live status page</a>
+    </div>
+
+    <h2>Your events</h2>
+    <div id="mine"><div class="empty">Loading...</div></div>
+
+    <h2>Ask EventPulse</h2>
+    <div class="card cp">
+      <div class="cp-lead">Ask about your event: when to arrive, which gate, the best way out, the weather, where to stay.</div>
+      <div class="cp-log" id="cpLog" aria-live="polite"></div>
+      <div class="cp-chips" id="cpChips">
+        <button type="button" class="ghost">When does my event start?</button>
+        <button type="button" class="ghost">Which gate should I use?</button>
+        <button type="button" class="ghost">What's the best way out?</button>
+        <button type="button" class="ghost">What's the weather at the venue?</button>
+        <button type="button" class="ghost">How crowded is it?</button>
+        <button type="button" class="ghost">How do I get there?</button>
+        <button type="button" class="ghost">Where can I stay nearby?</button>
+      </div>
+      <form id="cpForm" class="cp-form">
+        <input id="cpQ" maxlength="400" autocomplete="off" placeholder="Ask a question" aria-label="Question" />
+        <button type="submit" id="cpSend">Ask</button>
+      </form>
+      <div class="msg" id="cpMsg"></div>
+    </div>
+
+    <h2>Register for an event</h2>
+    <div id="events"><div class="empty">Loading events...</div></div>
+  </section>
+
+</div></main>
+
+<script>
+"use strict";
+// This machine, or the live API reached over the local network (a phone on the same Wi-Fi).
+const LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost"
+  || /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname)
+  || location.hostname.endsWith(".vercel.app") || document.querySelector('meta[name="ep-live-api"]') !== null;
+const API = location.port === "8080" ? "http://127.0.0.1:8000" : "";
+const KEY = "eventpulse_attendee_auth";     // { token, email, name }; home.html reads it too
+const $ = (id) => document.getElementById(id);
+
+function readAuth() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { return null; } }
+function writeAuth(a) { try { a ? localStorage.setItem(KEY, JSON.stringify(a)) : localStorage.removeItem(KEY); } catch (e) { /* works for this visit only */ } }
+let auth = readAuth();
+let registrations = [];
+
+function when(h) { return `Day ${Math.floor(h / 24) + 1} · ${String(h % 24).padStart(2, "0")}:00`; }
+function setMsg(id, text, kind) { const m = $(id); m.textContent = text || ""; m.className = "msg" + (kind ? " " + kind : ""); }
+const UNREACHABLE = "This needs the live API, which isn't reachable here.";
+
+// JSON request. A host with no backend answers 404/405 with HTML, which must read
+// as "service unavailable" and not as a wrong password.
+async function api(path, method, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (auth && auth.token) headers.Authorization = `Bearer ${auth.token}`;
+  let res;
+  try { res = await fetch(API + path, { method: method || "GET", headers, body: body ? JSON.stringify(body) : undefined }); }
+  catch (e) { return { ok: false, status: 0, data: null, unreachable: true }; }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* not JSON */ }
+  return { ok: res.ok, status: res.status, data, unreachable: data === null && (res.status === 404 || res.status === 405 || res.status >= 500) };
+}
+
+// ------------------------------------------------------------------ views
+function render() {
+  const signedIn = !!(auth && auth.token);
+  $("authView").hidden = signedIn;
+  $("appView").hidden = !signedIn;
+
+  const right = $("right");
+  right.textContent = "";
+  if (signedIn) {
+    const who = document.createElement("span"); who.textContent = auth.email; right.appendChild(who);
+    const out = document.createElement("button"); out.type = "button"; out.className = "link"; out.textContent = "Sign out";
+    out.addEventListener("click", () => signOut());
+    right.appendChild(out);
+    $("hello").textContent = `Hello, ${auth.name || auth.email}`;
+    loadApp();
+  } else {
+    const a = document.createElement("a"); a.href = "home.html"; a.innerHTML = "&larr; Home"; right.appendChild(a);
+  }
+}
+
+function signOut(message) {
+  auth = null; writeAuth(null); registrations = [];
+  $("result").hidden = true;
+  render();
+  if (message) setMsg("inMsg", message, "err");
+}
+
+function showTab(name) {
+  const up = name === "up";
+  $("tabIn").setAttribute("aria-selected", String(!up));
+  $("tabUp").setAttribute("aria-selected", String(up));
+  $("formIn").hidden = up; $("formUp").hidden = !up;
+}
+$("tabIn").addEventListener("click", () => showTab("in"));
+$("tabUp").addEventListener("click", () => showTab("up"));
+
+function finishSignIn(data) {
+  auth = { token: data.token, email: data.email, name: data.name };
+  writeAuth(auth);
+  render();
+}
+
+$("formIn").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = $("inEmail").value.trim(), password = $("inPass").value;
+  if (!email || !password) { setMsg("inMsg", "Enter your email and password.", "err"); return; }
+  $("inBtn").disabled = true; setMsg("inMsg", "Signing in...");
+  const r = await api("/auth/login", "POST", { role: "attendee", email, password });
+  $("inBtn").disabled = false;
+  if (r.unreachable) { setMsg("inMsg", UNREACHABLE, "err"); return; }
+  if (!r.ok) { setMsg("inMsg", (r.data && r.data.detail) || "Could not sign in.", "err"); return; }
+  setMsg("inMsg", ""); $("inPass").value = "";
+  finishSignIn(r.data);
+});
+
+$("formUp").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("upName").value.trim(), email = $("upEmail").value.trim(), password = $("upPass").value;
+  if (!name) { setMsg("upMsg", "Enter your name.", "err"); return; }
+  if (!email) { setMsg("upMsg", "Enter your email.", "err"); return; }
+  if (password.length < 8) { setMsg("upMsg", "Choose a password of at least 8 characters.", "err"); return; }
+  $("upBtn").disabled = true; setMsg("upMsg", "Creating your account...");
+  const r = await api("/auth/signup", "POST", { role: "attendee", name, email, password });
+  $("upBtn").disabled = false;
+  if (r.unreachable) { setMsg("upMsg", UNREACHABLE, "err"); return; }
+  if (!r.ok) { setMsg("upMsg", (r.data && r.data.detail) || "Could not create the account.", "err"); return; }
+  setMsg("upMsg", ""); $("upPass").value = "";
+  finishSignIn(r.data);
+});
+
+// ---------------------------------------------------------------- signed in
+let eventList = null;
+
+async function loadEvents() {
+  if (eventList) return eventList;
+  const tries = LOCAL ? [`${API}/events?hour=100`, "data/hour-100.json"] : ["data/hour-100.json"];
+  for (const url of tries) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const j = await res.json();
+      const ev = j.events && !Array.isArray(j.events) ? j.events.all : (j.all || j.events);
+      if (Array.isArray(ev) && ev.length) { eventList = ev; return ev; }
+    } catch (e) { /* next source */ }
+  }
+  return null;
+}
+
+function statusLink(token) { return `status.html?token=${encodeURIComponent(token)}`; }
+
+async function loadApp() {
+  const r = await api("/attendee/registrations");
+  if (r.status === 401 || r.status === 403) { signOut("Your session has ended. Please sign in again."); return; }
+  registrations = r.ok && Array.isArray(r.data) ? r.data : [];
+  renderMine();
+  renderEvents(await loadEvents());
+}
+
+function renderMine() {
+  const box = $("mine");
+  box.textContent = "";
+  if (!registrations.length) {
+    const d = document.createElement("div"); d.className = "empty"; d.textContent = "You haven't registered for anything yet.";
+    box.appendChild(d);
+    return;
+  }
+  registrations.forEach((g) => {
+    const row = document.createElement("div"); row.className = "row";
+    const left = document.createElement("div");
+    const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = g.event_name;
+    const mt = document.createElement("div"); mt.className = "mt";
+    mt.textContent = `${g.venue_name}${g.start_hour != null ? " · " + when(g.start_hour) : ""}`;
+    left.appendChild(nm); left.appendChild(mt);
+    const a = document.createElement("a"); a.className = "btn small"; a.href = g.status_link; a.textContent = "Live status";
+    a.style.padding = "8px 14px"; a.style.fontSize = "13.5px";
+    row.appendChild(left); row.appendChild(a);
+    box.appendChild(row);
+  });
+}
+
+function renderEvents(list) {
+  const box = $("events");
+  box.textContent = "";
+  if (!list) {
+    const d = document.createElement("div"); d.className = "empty"; d.textContent = "Events could not be loaded. Try again shortly.";
+    box.appendChild(d);
+    return;
+  }
+  const have = new Set(registrations.map((g) => g.event_id));
+  list.forEach((ev) => {
+    const row = document.createElement("div"); row.className = "row";
+    const left = document.createElement("div");
+    const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = ev.name;
+    const mt = document.createElement("div"); mt.className = "mt";
+    mt.textContent = `${ev.zone_name} · ${Number(ev.expected_attendance).toLocaleString()} expected · ${when(ev.start_hour)}`;
+    left.appendChild(nm); left.appendChild(mt);
+    row.appendChild(left);
+
+    if (have.has(ev.event_id)) {
+      const t = document.createElement("span"); t.className = "tag"; t.textContent = "✓ Registered";
+      row.appendChild(t);
+    } else {
+      const b = document.createElement("button"); b.type = "button"; b.className = "small"; b.textContent = "Register";
+      b.addEventListener("click", () => register(ev, b));
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  });
+}
+
+async function register(ev, btn) {
+  btn.disabled = true; btn.textContent = "Registering...";
+  const r = await api("/register", "POST", { event_id: ev.event_id });
+  if (r.status === 401 || r.status === 403) { signOut("Your session has ended. Please sign in again."); return; }
+  if (r.unreachable) { btn.disabled = false; btn.textContent = "Register"; showResult({ title: "Couldn't register", state: UNREACHABLE, kind: "warn" }); return; }
+  if (!r.ok) { btn.disabled = false; btn.textContent = "Register"; showResult({ title: "Couldn't register", state: (r.data && r.data.detail) || "Something went wrong.", kind: "warn" }); return; }
+
+  const d = r.data, m = d.email_result || {};
+  let title = `You're registered for ${d.event_name}`, state, kind = "good", label = "Email";
+  if (m.delivered) { state = `We've emailed your link to ${d.email}. It should arrive within a minute.`; label = "What we sent"; }
+  else if (m.status === "skipped") { title = `You're already registered for ${d.event_name}`; state = "We emailed you a moment ago, so we haven't sent another. Your link is below."; }
+  else if (m.status === "failed") { kind = "warn"; state = `Your registration is saved, but the email didn't send (${m.error || "unknown error"}). Use the button below.`; label = "The message we tried to send"; }
+  else { kind = "warn"; state = "Email isn't switched on for this server, so nothing was sent to your inbox. This is what would have been sent."; label = "Simulated email"; }
+
+  showResult({ title, state, kind, mail: m.body ? `${label}\n\n${m.body}` : "", link: statusLink(d.attendee_token) });
+  await loadApp();
+}
+
+function showResult({ title, state, kind, mail, link }) {
+  $("rTitle").textContent = title;
+  const s = $("rState"); s.textContent = state; s.className = "state " + (kind || "");
+  $("rMail").textContent = mail || ""; $("rMail").hidden = !mail;
+  const go = $("rGo"); go.hidden = !link; if (link) go.setAttribute("href", link);
+  $("result").hidden = false;
+  $("result").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+if (new URLSearchParams(location.search).get("tab") === "signup") showTab("up");
+render();
+
+// ------------------------------------------------------------------ copilot
+function cpBubble(kind, text, note) {
+  const d = document.createElement("div"); d.className = `cp-msg ${kind}`; d.textContent = text;
+  if (note) { const s = document.createElement("small"); s.textContent = note; d.appendChild(s); }
+  $("cpLog").appendChild(d); $("cpLog").scrollTop = $("cpLog").scrollHeight; return d;
+}
+
+async function askCopilot(q) {
+  q = (q || "").trim();
+  if (!q) return;
+  $("cpQ").value = ""; setMsg("cpMsg", "");
+  cpBubble("me", q);
+  const wait = cpBubble("ai", "Checking...");
+  $("cpSend").disabled = true;
+  const r = await api("/attendee/copilot", "POST", { question: q });
+  $("cpSend").disabled = false;
+  wait.remove();
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) { setMsg("cpMsg", "Please sign in again.", "err"); return; }
+    setMsg("cpMsg", r.unreachable ? UNREACHABLE : ((r.data && r.data.detail) || "Couldn't answer that."), "err"); return;
+  }
+  const b = cpBubble("ai", r.data.answer, "From live EventPulse data");
+  if (r.data.refine_id) refine(b, r.data.refine_id);
+}
+
+async function refine(bubble, id) {
+  const line = document.createElement("div"); line.className = "cp-nugen wait";
+  line.textContent = "EventPulse model on Nugen is thinking...";
+  bubble.appendChild(line);
+  const r = await api("/copilot/refine", "POST", { id });
+  if (r.ok && r.data && r.data.ok) {
+    line.className = "cp-nugen"; line.textContent = "";
+    const b = document.createElement("b"); b.textContent = `EventPulse model on Nugen${r.data.confidence != null ? ` \u00B7 ${Math.round(r.data.confidence)}% confident` : ""}`;
+    line.appendChild(b); line.appendChild(document.createTextNode(r.data.text));
+  } else if (r.data && r.data.reason) {
+    line.className = "cp-nugen off"; line.textContent = `EventPulse model on Nugen: not shown (${r.data.reason}).`;
+  } else line.remove();
+}
+
+$("cpForm").addEventListener("submit", (e) => { e.preventDefault(); askCopilot($("cpQ").value); });
+$("cpChips").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") askCopilot(e.target.textContent); });
+</script>
+</body>
+</html>

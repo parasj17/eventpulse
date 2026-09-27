@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EventPulse — Move mega-event crowds, not just measure them</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<meta name="description" content="EventPulse forecasts crowd pressure, redirects people to the least busy exits and routes, and gives organisers a live control room." />
+<style>
+  :root {
+    --bg:        #0A0A0A;
+    --panel:     #101010;
+    --panel-hi:  #171717;
+    --line:      #242424;
+    --ink:       #F2F2F2;
+    --ink-dim:   #A0A0A0;
+    --ink-faint: #6A6A6A;
+    --accent:    #FF3B1F;
+    --good:      #00C46A;
+    --warn:      #D9A441;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 22px; }
+
+  /* Nav */
+  nav.top {
+    position: sticky; top: 0; z-index: 20; background: rgba(10,10,10,.92);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+  }
+  nav.top .wrap { display: flex; align-items: center; gap: 22px; height: 62px; }
+  .brand { font-weight: 800; letter-spacing: .3px; text-decoration: none; font-size: 17px; }
+  .brand span { color: var(--accent); }
+  .links { display: flex; gap: 20px; margin-left: 12px; }
+  .links a { color: var(--ink-dim); text-decoration: none; font-size: 14px; }
+  .links a:hover { color: var(--ink); }
+  .nav-cta { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
+  button, .btn {
+    font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none;
+    border-radius: 9px; padding: 9px 16px; border: 1px solid var(--line);
+    background: var(--panel-hi); color: var(--ink); display: inline-block;
+  }
+  button:hover, .btn:hover { border-color: var(--ink-faint); }
+  .btn.primary, button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover, button.primary:hover { filter: brightness(1.08); }
+  .btn.big { padding: 13px 22px; font-size: 15px; }
+  button:focus-visible, .btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--ink-dim); outline-offset: 2px;
+  }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .linklike { background: none; border: none; padding: 0; color: var(--ink-dim); text-decoration: underline; font-size: 13px; font-weight: 500; }
+
+  /* Hero */
+  .hero { padding: 84px 0 56px; background:
+      radial-gradient(ellipse at 78% 20%, rgba(255,59,31,.16), transparent 55%),
+      radial-gradient(ellipse at 15% 90%, rgba(0,196,106,.10), transparent 50%); }
+  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); font-weight: 700; }
+  h1 { font-size: clamp(34px, 5.4vw, 60px); line-height: 1.06; margin: 14px 0 18px; letter-spacing: -1px; max-width: 800px; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lead { font-size: 18px; color: var(--ink-dim); max-width: 640px; margin: 0 0 28px; }
+  .paths { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 14px; margin-bottom: 14px; }
+  .path { display: flex; flex-direction: column; gap: 3px; text-align: left; text-decoration: none; cursor: pointer;
+    background: var(--accent); border: 1px solid var(--accent); color: #fff; border-radius: 14px; padding: 16px 20px; font: inherit; }
+  .path .who { font-size: 11px; font-weight: 700; letter-spacing: .9px; text-transform: uppercase; opacity: .8; }
+  .path .act { font-size: 20px; font-weight: 800; letter-spacing: -.3px; }
+  .path .why { font-size: 13.5px; opacity: .85; font-weight: 500; }
+  .path:hover { filter: brightness(1.08); }
+  .path.organise { background: var(--panel-hi); border-color: var(--line); color: var(--ink); }
+  .path.organise:hover { border-color: var(--ink-faint); filter: none; }
+  .paths { margin-bottom: 24px; }
+  .explore { display: inline-block; font-size: 20px; font-weight: 700; color: var(--ink); text-decoration: none;
+    border-bottom: 2px solid var(--accent); padding-bottom: 3px; }
+  .explore:hover { color: var(--accent); }
+  .nearhome { margin-top: 30px; max-width: 640px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .nearhome[hidden] { display: none; }
+  .nearhome .t { display: flex; align-items: center; gap: 9px; font-weight: 700; margin-bottom: 4px; flex-wrap: wrap; }
+  .nearhome .dot { width: 10px; height: 10px; border-radius: 50%; background: #4DA3FF; box-shadow: 0 0 0 4px rgba(77,163,255,.22); }
+  .nearhome .lvl { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 6px; }
+  .nearhome .lvl.calm { background: rgba(0,196,106,.16); color: var(--good); } .nearhome .lvl.filling { background: rgba(217,164,65,.16); color: var(--warn); }
+  .nearhome .lvl.crowded, .nearhome .lvl.full { background: rgba(255,59,31,.16); color: var(--accent); }
+  .nearhome .sub { color: var(--ink-dim); font-size: 14px; }
+  .nearhome ul { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+  .nearhome li { background: var(--panel-hi); border-radius: 10px; padding: 9px 12px; font-size: 14px; }
+  .nearhome li span { display: block; color: var(--ink-faint); font-size: 12.5px; margin-top: 2px; }
+  .nugen-line { margin-top: 18px; display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink-dim);
+    border: 1px solid #3b2f5e; background: rgba(155,107,255,.07); border-radius: 999px; padding: 7px 14px; }
+  .nugen-line i { width: 8px; height: 8px; border-radius: 50%; background: #9b6bff; box-shadow: 0 0 0 3px rgba(155,107,255,.22); }
+  .nugen-line b { color: var(--ink); }
+  .snapshot { display: flex; gap: 38px; flex-wrap: wrap; margin-top: 46px; padding-top: 26px; border-top: 1px solid var(--line); }
+  .snapshot[hidden] { display: none; }
+  .snap .n { font-size: 30px; font-weight: 800; line-height: 1.1; }
+  .snap .l { font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .7px; }
+  .n.good { color: var(--good); } .n.warn { color: var(--warn); } .n.crit { color: var(--accent); }
+
+  /* Sections */
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
+  section h2 { font-size: clamp(26px, 3.4vw, 36px); margin: 8px 0 12px; letter-spacing: -.5px; }
+  section .intro { color: var(--ink-dim); max-width: 660px; margin: 0 0 36px; font-size: 16.5px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 17px; }
+  .card p { margin: 0; color: var(--ink-dim); font-size: 14.5px; }
+  .card .tag { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .step { position: relative; padding: 22px 22px 22px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+  .step::before { counter-increment: s; content: counter(s); display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center;
+    border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; font-size: 14px; margin-bottom: 12px; }
+  .step h3 { margin: 0 0 6px; font-size: 17px; } .step p { margin: 0; color: var(--ink-dim); font-size: 14.5px; }
+
+  details a { color: var(--ink); text-underline-offset: 3px; }
+  .about p { color: var(--ink-dim); font-size: 16px; max-width: 720px; }
+  .about .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; }
+  .fact .n { font-size: 26px; font-weight: 800; } .fact .l { color: var(--ink-faint); font-size: 13px; }
+  .note { margin-top: 26px; padding: 14px 18px; border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 10px;
+    color: var(--ink-dim); font-size: 14px; background: var(--panel); max-width: 720px; }
+
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; }
+  summary { cursor: pointer; padding: 15px 18px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--ink-faint); font-size: 20px; line-height: 1; }
+  details[open] summary::after { content: "\2212"; }
+  details p { margin: 0; padding: 0 18px 16px; color: var(--ink-dim); font-size: 14.5px; }
+
+  .contact a.mail { color: var(--ink); font-weight: 600; }
+  footer { border-top: 1px solid var(--line); padding: 30px 0 44px; color: var(--ink-faint); font-size: 13px; }
+  footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+  footer a { color: var(--ink-dim); text-decoration: none; margin-right: 16px; } footer a:hover { color: var(--ink); }
+
+  @media (max-width: 860px) {
+    .links { display: none; }
+    .grid3, .steps { grid-template-columns: 1fr; }
+    .grid2, .about .facts { grid-template-columns: 1fr; }
+    .paths { grid-template-columns: 1fr; }
+    .hero { padding: 52px 0 40px; }
+    section { padding: 52px 0; }
+    nav.top .wrap { height: auto; padding-top: 10px; padding-bottom: 10px; }
+  }
+  .brand { display: inline-flex; align-items: center; gap: 9px; }
+  .brand .wm { font-weight: inherit; white-space: nowrap; }
+  .logo-mark { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 3px 10px rgba(255,59,31,.35)); }
+  .brand-sub { color: var(--ink-faint, #6A6A6A); font-weight: 500; font-size: 13px; margin-left: 6px; }
+</style>
+</head>
+<body>
+
+<nav class="top" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="#top"><img class="logo-mark" src="logo.svg" alt="" /><b class="wm">Event<span>Pulse</span></b></a>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#platforms">For platforms</a>
+      <a href="#about">About us</a>
+      <a href="#faq">FAQ</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <div class="nav-cta" id="navCta"></div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="eyebrow">Mega-event crowd orchestration</div>
+    <h1>Get everyone out &mdash; and in &mdash; <em>without the crush.</em></h1>
+    <p class="lead">
+      EventPulse forecasts where pressure is building, closes a gate before it overflows and sends the crowd
+      to one with room, tells each person which gate, route and stay suits them, and shows organisers how
+      rain, heat or a surge would ripple through the city before it happens.
+    </p>
+    <div class="paths">
+      <a class="path" href="attendee.html">
+        <span class="who">For attendees</span>
+        <span class="act">Register for an event</span>
+        <span class="why">Get an email with gate times and your live page</span>
+      </a>
+      <a class="path organise" href="organizer.html">
+        <span class="who">For organisers</span>
+        <span class="act">Organise an event</span>
+        <span class="why">For the team running it, at a venue or a ticketing platform</span>
+      </a>
+    </div>
+    <a class="explore" href="index.html">Explore the live dashboard <span aria-hidden="true">&rarr;</span></a>
+
+    <div class="nearhome" id="nearHome" hidden aria-live="polite"></div>
+
+    <div class="snapshot" id="snapshot" hidden></div>
+    <div class="nugen-line" id="nugenLine" hidden><i></i><span></span></div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <div class="eyebrow">What it does</div>
+    <h2>From measuring crowds to moving them</h2>
+    <p class="intro">Most tools tell you a gate is jammed. EventPulse works out what to do about it, and checks the answer before you commit.</p>
+    <div class="grid3">
+      <div class="card"><div class="tag">See</div><h3>3D city digital twin</h3>
+        <p>A live 3D map of the city with pressure heat, transport load, forecasts, and crowds at places nobody mapped, like a packed metro station, from attendees who choose to share their location anonymously.</p></div>
+      <div class="card"><div class="tag">Protect</div><h3>Gates that never overflow</h3>
+        <p>A gate turns amber at 75% and closes at 95%, and its overflow is sent to the gates with room. The venue map shows the redirected crowd, and points anyone in a packed block to the nearest gate.</p></div>
+      <div class="card"><div class="tag">Weather</div><h3>Weather digital twin</h3>
+        <p>Live weather and public reports feed a model that learns how rain and heat change the city. Try a cloudburst or a heatwave and watch the knock-on effects on transport, exits and hotels, each with a likely range.</p></div>
+      <div class="card"><div class="tag">Listen</div><h3>Social pulse</h3>
+        <p>Public Reddit and Mastodon posts and news about the weather, read for what travellers report, how they feel and where, with trends and early warning when reports suddenly rise.</p></div>
+      <div class="card"><div class="tag">Ask</div><h3>Copilot for everyone</h3>
+        <p>Organisers ask about gates, crowds and what-ifs; attendees ask when to arrive, which gate to use and the best way out. Answers come from live data, with our Nugen-aligned model alongside.</p></div>
+      <div class="card"><div class="tag">Near you</div><h3>Guidance that follows you</h3>
+        <p>With your permission, the site uses your location to show how busy it is around you and the stays closest to you, and the 3D map follows you as you walk.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2>Sense, predict, redirect</h2>
+    <p class="intro">Three steps, repeated every few minutes while an event runs.</p>
+    <div class="steps">
+      <div class="step"><h3>Sense</h3><p>Occupancy, gate queues, transport load, live weather and public reports are read per zone and per gate, and turned into a live picture of the city.</p></div>
+      <div class="step"><h3>Predict</h3><p>A forecasting model looks six hours ahead, and the weather twin simulates what rain, heat or a surge would do, 400 times over, to show how sure it is.</p></div>
+      <div class="step"><h3>Redirect</h3><p>Full gates close at 95% and their crowd is sent where there's room. Attendees get an email and a live page with their best gate; organisers get the plan and the controls.</p></div>
+    </div>
+  </div>
+</section>
+
+
+<section id="platforms">
+  <div class="wrap">
+    <div class="eyebrow">For ticketing platforms</div>
+    <h2>Add crowd guidance to every ticket you sell</h2>
+    <p class="intro">
+      EventPulse is built to sit behind the platform that sells the tickets. Your buyers keep using your app;
+      they just get a live link that tells them which gate is quiet on the way in and which is fastest on the way out.
+    </p>
+    <div class="steps">
+      <div class="step"><h3>Create a key</h3><p>In the organiser console, create a partner key for your app. It reaches only your own events, and you can revoke it at any time.</p></div>
+      <div class="step"><h3>Register buyers</h3><p>When a ticket is sold, your server sends us the buyer's email and the event, and gets back their personal live link.</p></div>
+      <div class="step"><h3>Share the link</h3><p>Put it in the ticket email or show it in your app. It updates itself from arrival to the last exit, with no new account for the buyer.</p></div>
+    </div>
+    <p style="margin-top: 22px;"><a class="explore" href="partners.html">Read the developer guide <span aria-hidden="true">&rarr;</span></a></p>
+  </div>
+</section>
+
+<section id="about" class="about">
+  <div class="wrap">
+    <div class="eyebrow">About us</div>
+    <h2>Cities have spare capacity. It&rsquo;s just in the wrong place.</h2>
+    <p>
+      EventPulse started from a simple observation about mega-events: the crowd problem is rarely a lack of
+      space. It&rsquo;s that everyone is told the same thing at the same moment &mdash; use the main gate, take the
+      nearest metro &mdash; so the one obvious option is overwhelmed while others sit half empty.
+    </p>
+    <p>
+      We build tools that forecast that pressure early and then actively rebalance it: per gate inside a venue,
+      per link across the transport network, and per neighbourhood across the city. The aim is the shortest
+      safe exit for the whole crowd, not just the fastest route for one person.
+    </p>
+    <div class="facts">
+      <div class="fact"><div class="n">10</div><div class="l">city zones modelled</div></div>
+      <div class="fact"><div class="n">95%</div><div class="l">a gate closes and its crowd is redirected</div></div>
+      <div class="fact"><div class="n">6h</div><div class="l">forecast horizon</div></div>
+    </div>
+    <div class="note">
+      <b>About the data:</b> the city, its events and its crowds are simulated for this demo. The weather, public posts and
+      news are live, and registration emails are real.
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="eyebrow">FAQ</div>
+    <h2>Questions people ask</h2>
+    <div style="max-width: 760px; margin-top: 24px;">
+      <details><summary>Do I need to install an app?</summary>
+        <p>No. Attendees get a link that opens in any browser and updates on its own.</p></details>
+      <details><summary>How do I get started as an attendee?</summary>
+        <p>Create an attendee account with your email, then register for the event you're going to. We email you a personal link to its live status page, and your registrations are always listed when you sign in.</p></details>
+      <details><summary>Is my location tracked?</summary>
+        <p>The site asks your browser for your location to show what's busy near you and the closest stays. That stays on your device. Separately, you can choose to share it anonymously to help map crowds: it's reduced to an area about 150 m across, forgotten after five minutes, never tied to your account, and only shown as a count once three or more people are in the same spot. It's off until you turn it on.</p></details>
+      <details><summary>We sell tickets. Can our buyers use this?</summary>
+        <p>Yes, that's what the partner API is for. An organiser creates a key in the console, your server registers each buyer, and you share their live link in your own ticket email or app. See the <a href="partners.html">developer guide</a>.</p></details>
+      <details><summary>Will I get an email?</summary>
+        <p>Yes. When you register, we email the address you signed up with: when the gates open, when the event starts and ends, and a button that opens your live page in your browser. If it isn't in your inbox, check spam.</p></details>
+      <details><summary>Can I ask questions?</summary>
+        <p>Yes. Attendees can ask EventPulse when to arrive, which gate to use, the best way out, the weather at the venue or where to stay. Organisers can ask about gates, crowds, alerts and what-ifs. Answers come from the live data, with our own model, aligned on crowd operations through Nugen, alongside.</p></details>
+      <details><summary>Who can use the organiser console?</summary>
+        <p>Only signed-in organisers, on their own separate sign-in. Attendee accounts can't open it, and changing gates or uploading floor plans always needs an organiser sign-in.</p></details>
+      <details><summary>Is the data real?</summary>
+        <p>Partly. Events, zones and crowds are simulated, so the numbers show how the system behaves rather than a real city. The weather, public posts and news are live.</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="contact">
+  <div class="wrap">
+    <div class="eyebrow">Contact</div>
+    <h2>Talk to us</h2>
+    <p class="intro">Planning an event, or want a walkthrough? Send a note.</p>
+    <p><a class="mail" href="mailto:eventpulseofficial.team@gmail.com">eventpulseofficial.team@gmail.com</a></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a href="#features">Features</a><a href="#how">How it works</a><a href="#platforms">For platforms</a><a href="#about">About</a><a href="#faq">FAQ</a><a href="#contact">Contact</a>
+    </div>
+    <div>&copy; EventPulse &mdash; PS8 Mega-Event Hospitality Orchestration</div>
+  </div>
+</footer>
+
+
+<script src="locate.js"></script>
+<script src="presence.js"></script>
+<script>
+"use strict";
+
+// This machine, or the live API reached over the local network (a phone on the same Wi-Fi).
+const LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost"
+  || /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname)
+  || location.hostname.endsWith(".vercel.app") || document.querySelector('meta[name="ep-live-api"]') !== null;
+const API = location.port === "8080" ? "http://127.0.0.1:8000" : "";
+const ORG_KEY = "eventpulse_organizer_token";    // organizer.html reads this same key
+const ATT_KEY = "eventpulse_attendee_auth";     // JSON { token, email, name }, written by attendee.html
+const $ = (id) => document.getElementById(id);
+
+// Browser storage can be blocked (private windows, site settings). Everything
+// here must still work without it, just without staying signed in.
+function store(kind, key, val) {
+  try {
+    const s = kind === "session" ? sessionStorage : localStorage;
+    if (val === undefined) return s.getItem(key);
+    if (val === null) s.removeItem(key); else s.setItem(key, val);
+  } catch (e) { /* not fatal */ }
+  return null;
+}
+
+// ---------------------------------------------------- signed-in nav state
+function attendeeSession() {
+  try { const a = JSON.parse(store("local", ATT_KEY) || "null"); return a && a.token ? a : null; } catch (e) { return null; }
+}
+
+function renderNav() {
+  const box = $("navCta");
+  box.textContent = "";
+  const org = store("local", ORG_KEY) || store("session", ORG_KEY);
+  const att = attendeeSession();
+  if (!org && !att) return;
+
+  if (org) {
+    const a = document.createElement("a");
+    a.className = "btn primary"; a.href = "organizer.html"; a.textContent = "Organiser console";
+    box.appendChild(a);
+  }
+  if (att) {
+    const a = document.createElement("a");
+    a.className = org ? "btn" : "btn primary"; a.href = "attendee.html"; a.textContent = "My events";
+    box.appendChild(a);
+  }
+  const out = document.createElement("button");
+  out.type = "button"; out.className = "linklike"; out.textContent = "Sign out";
+  out.addEventListener("click", () => {
+    store("session", ORG_KEY, null);
+    store("local", ORG_KEY, null);
+    store("session", "eventpulse_organizer_who", null);
+    store("local", "eventpulse_organizer_who", null);
+    store("local", ATT_KEY, null);
+    renderNav();
+  });
+  box.appendChild(out);
+}
+
+// ---------------------------------------------------------- hero snapshot
+async function loadSnapshot() {
+  const H = 110;
+  let zones = null, alerts = [];
+  const tries = LOCAL
+    ? [async () => ({ zones: await (await fetch(`${API}/zones?hour=${H}`)).json(), alerts: await (await fetch(`${API}/alerts?hour=${H}`)).json() }),
+       async () => (await fetch(`data/hour-${H}.json`)).json()]
+    : [async () => (await fetch(`data/hour-${H}.json`)).json()];
+
+  for (const t of tries) {
+    try {
+      const d = await t();
+      if (Array.isArray(d.zones) && d.zones.length) { zones = d.zones; alerts = d.alerts || []; break; }
+    } catch (e) { /* try the next source */ }
+  }
+  if (!zones) return;
+
+  const cap = zones.reduce((s, z) => s + z.hotel_capacity, 0);
+  const occ = zones.reduce((s, z) => s + z.current_occupancy, 0);
+  const pct = cap ? (occ / cap) * 100 : 0;
+  const full = zones.filter((z) => z.occupancy_pct >= 95).length;
+  const crit = alerts.filter((a) => a.severity === "critical").length;
+
+  const cells = [
+    [`${pct.toFixed(0)}%`, "Citywide occupancy", pct >= 90 ? "crit" : pct >= 75 ? "warn" : "good"],
+    [`${full}/${zones.length}`, "Zones at capacity", full ? "crit" : "good"],
+    [String(crit), "Critical alerts", crit ? "crit" : "good"],
+  ];
+  const box = $("snapshot");
+  box.textContent = "";
+  cells.forEach(([n, l, cls]) => {
+    const c = document.createElement("div"); c.className = "snap";
+    const a = document.createElement("div"); a.className = `n ${cls}`; a.textContent = n;
+    const b = document.createElement("div"); b.className = "l"; b.textContent = l;
+    c.appendChild(a); c.appendChild(b); box.appendChild(c);
+  });
+  box.hidden = false;
+}
+
+// -------------------------------------------------------- near you (live)
+// Asked for as soon as the page opens. The position never leaves the browser here:
+// the card is built from the same zone and hotel data the rest of the site uses.
+let cityData = null;
+
+async function loadCityData() {
+  const tries = LOCAL
+    ? [async () => {
+        const clock = await (await fetch(`${API}/clock`)).json();
+        const [zones, hotels] = await Promise.all([fetch(`${API}/zones?hour=${clock.hour}`).then((r) => r.json()), fetch(`${API}/hotels?hour=${clock.hour}`).then((r) => r.json())]);
+        return { zones, hotels };
+      }, async () => { const d = await (await fetch("data/hour-110.json")).json(); return { zones: d.zones, hotels: d.hotels }; }]
+    : [async () => { const d = await (await fetch("data/hour-110.json")).json(); return { zones: d.zones, hotels: d.hotels }; }];
+  for (const t of tries) {
+    try { const d = await t(); if (Array.isArray(d.zones) && d.zones.length) { cityData = d; return; } } catch (e) { /* next source */ }
+  }
+}
+
+function renderNearHome(g) {
+  const box = $("nearHome");
+  if (g.lat == null || !cityData) { box.hidden = true; return; }
+  const near = EPLocate.nearestZone(cityData.zones, g.lat, g.lng);
+  if (!near || near.km > 25) { box.hidden = true; return; }
+
+  const a = EPLocate.assess(near.zone.occupancy_pct);
+  const byId = {}; cityData.zones.forEach((z) => { byId[z.id] = z; });
+  const stays = EPLocate.rankHotels(cityData.hotels, g.lat, g.lng, byId, 2);
+
+  box.textContent = "";
+  const t = document.createElement("div"); t.className = "t";
+  const dot = document.createElement("span"); dot.className = "dot"; t.appendChild(dot);
+  t.appendChild(document.createTextNode(`Near you right now: ${near.zone.name}`));
+  const lvl = document.createElement("span"); lvl.className = `lvl ${a.level}`; lvl.textContent = `${a.label} \u00B7 ${near.zone.occupancy_pct.toFixed(0)}%`; t.appendChild(lvl);
+  box.appendChild(t);
+  const sub = document.createElement("div"); sub.className = "sub"; sub.textContent = a.advice; box.appendChild(sub);
+
+  if (stays.length) {
+    const ul = document.createElement("ul");
+    stays.forEach((r) => {
+      const li = document.createElement("li"); li.textContent = r.hotel.name;
+      const sp = document.createElement("span"); sp.textContent = r.reason; li.appendChild(sp); ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+  box.hidden = false;
+}
+
+let nearHomeTimer = null;
+EPLocate.mountBanner();
+EPPresence.init();
+EPLocate.onChange((g) => {
+  clearTimeout(nearHomeTimer);
+  nearHomeTimer = setTimeout(() => renderNearHome(g), 400);
+});
+loadCityData().then(() => renderNearHome(EPLocate.get()));
+EPLocate.autoStart();
+
+// -------------------------------------------------------------------- boot
+renderNav();
+loadSnapshot();
+// Old ?signin= links now go straight to the right page.
+const want = new URLSearchParams(location.search).get("signin");
+if (want === "organizer") location.replace("organizer.html");
+else if (want === "attendee" || want === "register") location.replace("attendee.html");
+
+// Nugen connection, confirmed live by the server with Nugen itself.
+(function nugenLine() {
+  const api = location.port === "8080" ? "http://127.0.0.1:8000" : "";
+  fetch(`${api}/ai/nugen/verify`).then((r) => (r.ok ? r.json() : null)).then((v) => {
+    if (!v || v.accepted !== true) return;
+    const box = document.getElementById("nugenLine");
+    const t = box.querySelector("span");
+    const docs = (v.documents || []).filter((d) => d.status === "READY").length;
+    t.innerHTML = "";
+    const b = document.createElement("b"); b.textContent = "Nugen Intelligence";
+    t.appendChild(b);
+    t.appendChild(document.createTextNode(` \u00B7 API key accepted${docs ? ` \u00B7 ${docs} EventPulse training documents on Nugen` : ""}`
+      + (v.benchmark && v.benchmark.status === "READY" ? ` \u00B7 ${v.benchmark.samples}-question benchmark ready` : "")));
+    box.title = `Checked with Nugen at ${new Date(v.checked_at * 1000).toLocaleTimeString()}`;
+    box.hidden = false;
+  }).catch(() => {});
+})();
+</script>
+</body>
+</html>

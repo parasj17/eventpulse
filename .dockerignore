@@ -1,0 +1,6 @@
+backend/data/
+backend/engine/__pycache__/
+backend/__pycache__/
+backend/engine/model.pkl
+*.pyc
+.git/

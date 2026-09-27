@@ -1,0 +1,1661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EventPulse — Organizer</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<link rel="stylesheet" href="vendor/maplibre-gl.css" />
+<style>
+  :root {
+    --bg:        #0A0A0A;
+    --panel:     #101010;
+    --panel-hi:  #171717;
+    --line:      #242424;
+    --ink:       #F2F2F2;
+    --ink-dim:   #8C8C8C;
+    --ink-faint: #5A5A5A;
+    --accent:    #FF3B1F;
+    --good:      #00C46A;
+    --warn:      #D9A441;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  header {
+    padding: 16px 24px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header .brand { font-weight: 700; letter-spacing: 0.3px; }
+  header .brand span { color: var(--accent); }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 60px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 18px;
+  }
+  h2 { margin: 0 0 4px; font-size: 16px; }
+  .lead { color: var(--ink-dim); font-size: 13px; margin-bottom: 14px; }
+  label { display: block; font-size: 12.5px; color: var(--ink-dim); margin-bottom: 4px; }
+  input, select {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel-hi); color: var(--ink); font-size: 13.5px; margin-bottom: 12px;
+  }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button {
+    border: none; border-radius: 8px; padding: 9px 16px; font-size: 13.5px; font-weight: 600;
+    cursor: pointer; background: var(--accent); color: #fff;
+  }
+  button.secondary { background: var(--panel-hi); color: var(--ink); border: 1px solid var(--line); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .err { color: var(--accent); font-size: 13px; margin-top: 8px; }
+  .ok { color: var(--good); font-size: 13px; margin-top: 8px; }
+  .gate-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-radius: 8px; background: var(--panel-hi); margin-bottom: 8px;
+  }
+  .gate-row .name { font-weight: 600; font-size: 13.5px; }
+  .gate-row .note { color: var(--ink-faint); font-size: 12px; margin-top: 2px; }
+  .badge { border-radius: 6px; padding: 3px 9px; font-size: 11.5px; font-weight: 700; color: #fff; }
+  .badge.open { background: var(--good); }
+  .badge.restricted { background: var(--warn); }
+  .badge.closed { background: var(--accent); }
+  .floorplan {
+    position: relative; width: 100%; padding-bottom: 65%; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--panel-hi) center/cover no-repeat;
+    margin-bottom: 14px; overflow: hidden;
+  }
+  .dot {
+    position: absolute; width: 46px; height: 46px; border-radius: 50%;
+    transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center;
+    font-size: 9.5px; font-weight: 700; color: #fff; text-align: center; line-height: 1.1;
+    padding: 3px; border: 2px solid rgba(255,255,255,0.5);
+  }
+  .hidden { display: none; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 0 0 18px; }
+  .tab { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--ink-faint); padding: 9px 14px; font-size: 15px; }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .fine { color: var(--ink-faint); font-size: 12.5px; margin: -6px 0 12px; }
+  #loginCard { max-width: 460px; margin: 30px auto; }
+  #loginCard button[type=submit] { width: 100%; }
+  .head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+  .head-row h2 { margin: 0; }
+  .evrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--panel-hi); border-radius: 8px; margin-bottom: 8px; }
+  .evrow .nm { font-weight: 600; font-size: 14px; } .evrow .mt { color: var(--ink-faint); font-size: 12.5px; margin-top: 2px; }
+  .evrow .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  button.small { padding: 5px 10px; font-size: 12.5px; }
+  .radios { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+  .radios label { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--ink); font-size: 14px; }
+  .radios input { width: auto; margin: 0; }
+  #pickMap { height: 250px; border-radius: 10px; border: 1px solid var(--line); margin-bottom: 8px; background: var(--panel-hi); }
+  .coords { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .coords > div { flex: 1; min-width: 130px; }
+  .row3 { display: flex; gap: 12px; } .row3 > div { flex: 1; }
+  .grow { flex: 1; }
+
+  /* ---- floor plan editor */
+  .plan-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .plan-tools .seg { margin: 0; }
+  .plan-tools input[type=file] { width: auto; margin: 0; max-width: 240px; font-size: 12.5px; }
+  .plan-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 18px; align-items: start; }
+  .plan { position: relative; width: 100%; margin: 0 auto; aspect-ratio: 3 / 2; border: 1px solid var(--line); border-radius: 10px;
+    background: #0e1013; user-select: none; touch-action: none; }
+  .plan.adding { cursor: crosshair; }
+  .plan img.bg, .plan svg.schem { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+  .plan img.bg { object-fit: fill; }
+  .plan img.bg, .plan svg.schem { border-radius: 10px; }
+  .gate { position: absolute; transform: translate(-50%, -50%); width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #fff;
+    border: 2px solid rgba(255,255,255,.85); cursor: grab; box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 2; }
+  .gate:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  .gate.dragging { cursor: grabbing; z-index: 5; }
+  .gate.selected { box-shadow: 0 0 0 4px rgba(255,255,255,.35), 0 2px 8px rgba(0,0,0,.5); z-index: 4; }
+  .gate.open { background: var(--good); } .gate.restricted { background: var(--warn); } .gate.closed { background: var(--accent); }
+  .gate.oos { background: #555; border-style: dashed; }
+  .gate.draft { background: transparent; border: 2px dashed #fff; }
+  .gate .lbl { position: absolute; top: 38px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; font-weight: 700;
+    background: rgba(10,10,10,.82); border-radius: 5px; padding: 1px 6px; pointer-events: none; }
+  .gate.ghost { background: rgba(77,163,255,.18); border: 2px dashed #4DA3FF; color: #4DA3FF; cursor: pointer; z-index: 3; }
+  .gate.ghost:hover, .gate.ghost:focus-visible { background: rgba(77,163,255,.4); color: #fff; }
+  .suggest { margin-top: 12px; border: 1px solid #244a73; background: rgba(77,163,255,.07); border-radius: 10px; padding: 12px 14px; }
+  .suggest h3 { margin: 0 0 4px; font-size: 14px; }
+  .suggest .srow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .suggest .srow:first-of-type { border-top: 0; }
+  .suggest .srow .grow { flex: 1; }
+  .suggest .srow small { color: var(--ink-faint); }
+  .cp-log { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; max-height: 420px; overflow-y: auto; }
+  .cp-log:empty { display: none; }
+  .cp-msg { padding: 10px 13px; border-radius: 10px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; max-width: 92%; }
+  .cp-msg.me { align-self: flex-end; background: #242424; }
+  .cp-msg.ai { align-self: flex-start; background: rgba(77,163,255,.09); border: 1px solid #244a73; }
+  .cp-nugen { margin-top: 8px; padding: 7px 9px; border-left: 2px solid #9b6bff; background: rgba(155,107,255,.08); font-size: 13px; white-space: normal; }
+  .cp-nugen b { display: block; color: #c9b3ff; font-size: 11.5px; margin-bottom: 2px; }
+  .cp-nugen.wait { color: var(--ink-faint); font-style: italic; } .cp-nugen.off { color: var(--ink-faint); font-size: 11.5px; background: none; }
+  .cp-msg small { display: block; margin-top: 6px; color: var(--ink-faint); font-size: 11.5px; }
+  .cp-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .cp-chips button { font-size: 12.5px; padding: 5px 11px; }
+  .cp-form { display: flex; gap: 10px; }
+  .cp-form input { flex: 1; margin: 0; }
+  .keyrow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .keyrow:first-child { border-top: 0; }
+  .keyrow .grow { flex: 1; min-width: 0; }
+  .keyrow small { display: block; color: var(--ink-faint); font-size: 12px; margin-top: 2px; }
+  .keyrow.revoked { opacity: .5; }
+  .keyrow code, .newkey code, pre.snip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .newkey { margin: 12px 0; border: 1px solid #2c5a33; background: rgba(0,196,106,.07); border-radius: 10px; padding: 12px 14px; }
+  .newkey .k { display: flex; gap: 10px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  .newkey code { background: #0b0b0b; border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; font-size: 13px; word-break: break-all; flex: 1; min-width: 220px; }
+  pre.snip { background: #0b0b0b; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 12px; overflow-x: auto; margin: 8px 0 0; white-space: pre; }
+  .nconn { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 14px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid #3b2f5e; background: rgba(155,107,255,.06); font-size: 13.5px; }
+  .nconn .row { display: flex; gap: 10px; align-items: baseline; }
+  .nconn .row b { width: 20px; flex: none; text-align: center; }
+  .nconn .ok b { color: var(--good); } .nconn .bad b { color: var(--accent); } .nconn .wait b { color: var(--warn); }
+  .nconn small { color: var(--ink-faint); }
+  .pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+  @media (max-width: 760px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .pipe div { background: var(--panel-hi); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+  .pipe div.done { border-color: #2f6b45; } .pipe div.wait { border-style: dashed; }
+  .pipe b { display: block; font-size: 13px; margin-bottom: 3px; } .pipe small { color: var(--ink-faint); word-break: break-all; }
+  #livePlan ol { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.5; }
+  #livePlan .src { font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 2px 8px; background: #222; color: var(--ink-dim); margin-left: 6px; }
+  #livePlan .src.nugen { background: rgba(155,107,255,.18); color: #c9b3ff; }
+  .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  @media (max-width: 760px) { .field-grid { grid-template-columns: 1fr; } }
+  .field-grid select, .field-grid input { width: 100%; margin: 4px 0 8px; }
+  .field-grid .btnrow { display: flex; gap: 8px; align-items: center; }
+  .field-grid .btnrow input { margin: 0; }
+  #fieldCard .lead a { color: var(--ink); text-underline-offset: 3px; }
+  #partnerCard .lead a { color: var(--ink); text-underline-offset: 3px; }
+  .keyform { display: flex; gap: 10px; margin-top: 4px; }
+  .keyform input { flex: 1; margin: 0; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--ink-dim); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .gpanel { background: var(--panel-hi); border-radius: 10px; padding: 14px 16px; }
+  .gpanel h3 { margin: 0 0 4px; font-size: 15px; }
+  .gpanel .ph { color: var(--ink-dim); font-size: 13.5px; }
+  .gpanel .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .gpanel input { margin-bottom: 10px; }
+  .pos { color: var(--ink-faint); font-size: 12.5px; margin: -4px 0 10px; }
+  button.danger { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .grow-list .gate-row { cursor: pointer; }
+  .grow-list .gate-row.sel { outline: 1px solid var(--ink-faint); }
+  @media (max-width: 860px) { .plan-layout { grid-template-columns: 1fr; } }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .seg button { background: var(--panel-hi); color: var(--ink-dim); border: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); background: #1a1210; }
+  .simctl { max-width: 560px; }
+  .simres { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .simres h3 { margin: 0 0 4px; font-size: 16px; }
+  .simres .verdict { color: var(--ink-dim); font-size: 13.5px; margin-bottom: 14px; }
+  .cmp { display: grid; grid-template-columns: 1.4fr 1fr 24px 1fr; gap: 6px 10px; align-items: center; font-size: 13.5px; }
+  .cmp .h { color: var(--ink-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+  .cmp .k { color: var(--ink-dim); }
+  .cmp .arrow { color: var(--ink-faint); text-align: center; }
+  .v { font-weight: 700; }
+  .v.ok { color: var(--good); } .v.warning { color: var(--warn); } .v.critical { color: var(--accent); }
+  .place { display: flex; justify-content: space-between; padding: 7px 10px; border-radius: 8px; background: var(--panel-hi); margin-top: 6px; font-size: 13px; }
+  input[type=range] { padding: 0; accent-color: var(--accent); }
+  .sub { color: var(--ink-faint); font-size: 12.5px; margin: -6px 0 12px; }
+  .top-strip { display: flex; gap: 10px; align-items: flex-end; }
+  .top-strip > div { flex: 1; }
+  .top-strip button { flex-shrink: 0; }
+  .brand { display: inline-flex; align-items: center; gap: 9px; }
+  .brand .wm { font-weight: inherit; white-space: nowrap; }
+  .logo-mark { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 3px 10px rgba(255,59,31,.35)); }
+  .brand-sub { color: var(--ink-faint, #6A6A6A); font-weight: 500; font-size: 13px; margin-left: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><img class="logo-mark" src="logo.svg" alt="" /><b class="wm">Event<span>Pulse</span></b><small class="brand-sub">Organiser console</small></div>
+  <div id="who" style="color: var(--ink-dim); font-size: 13px;"></div>
+</header>
+
+<main>
+
+  <div id="loginCard" class="card">
+    <h2>Organisers</h2>
+    <div class="lead">Sign in or create an organiser account to run the control room: gates, floor plans, what-if simulations.</div>
+
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" id="tabIn" aria-selected="true" aria-controls="formIn">Sign in</button>
+      <button type="button" class="tab" role="tab" id="tabUp" aria-selected="false" aria-controls="formUp">Create account</button>
+    </div>
+
+    <form id="formIn" novalidate>
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email" autocomplete="username" />
+      <label for="loginPassword">Password</label>
+      <input id="loginPassword" type="password" autocomplete="current-password" />
+      <div class="fine" id="demoHint" hidden>Local demo account: organizer@eventpulse.demo / eventpulse</div>
+      <button type="submit" id="inBtn">Sign in</button>
+    </form>
+
+    <form id="formUp" novalidate hidden>
+      <label for="upName">Your name</label>
+      <input id="upName" type="text" autocomplete="name" />
+      <label for="upEmail">Email</label>
+      <input id="upEmail" type="email" autocomplete="email" />
+      <label for="upPass">Password</label>
+      <input id="upPass" type="password" autocomplete="new-password" />
+      <div class="fine">At least 8 characters.</div>
+      <div id="codeRow" hidden>
+        <label for="upCode">Organiser access code</label>
+        <input id="upCode" type="text" autocomplete="off" />
+        <div class="fine">Ask the person who runs this deployment for the code.</div>
+      </div>
+      <button type="submit" id="upBtn">Create organiser account</button>
+    </form>
+    <div id="loginErr" class="err" role="alert"></div>
+  </div>
+
+  <div id="app" class="hidden">
+
+    <div class="card">
+      <div class="top-strip">
+        <div>
+          <label for="venueSelect">Venue</label>
+          <select id="venueSelect"></select>
+        </div>
+        <div>
+          <label for="hourInput">Hour (demo clock)</label>
+          <input id="hourInput" type="number" min="24" max="143" value="106" />
+        </div>
+        <button class="secondary" id="signOutBtn" type="button">Sign out</button>
+      </div>
+      <div class="fine" id="venueMeta" style="margin: 10px 0 0;"></div>
+    </div>
+
+    <div class="card" id="eventsCard">
+      <div class="head-row">
+        <h2>Events</h2>
+        <button type="button" class="secondary small" id="newEventBtn">+ New event</button>
+      </div>
+      <div class="lead">The events at this venue. Use the previews to see how the venue looks as people arrive and leave.</div>
+      <div id="eventList"></div>
+
+      <form id="eventForm" class="hidden" novalidate style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
+        <h2>New event</h2>
+        <div class="radios" role="radiogroup" aria-label="Where is it?">
+          <label><input type="radio" name="evWhere" value="new" id="evWhereNew" checked /> At a new venue</label>
+          <label><input type="radio" name="evWhere" value="old" id="evWhereOld" /> At <b id="evWhereName">this venue</b></label>
+        </div>
+
+        <div id="newVenueFields">
+          <div class="row3">
+            <div><label for="evVenueName">Venue name</label><input id="evVenueName" maxlength="60" placeholder="e.g. Lakefront Arena" /></div>
+            <div><label for="evCapacity">Venue capacity</label><input id="evCapacity" type="number" min="500" max="200000" step="100" value="20000" /></div>
+          </div>
+          <label>Venue location <span style="color:var(--ink-faint)">&mdash; click the map to drop the pin</span></label>
+          <div id="pickMap" aria-label="Map for choosing the venue location"></div>
+          <div class="coords">
+            <div><label for="evLat">Latitude</label><input id="evLat" type="number" step="0.0001" /></div>
+            <div><label for="evLng">Longitude</label><input id="evLng" type="number" step="0.0001" /></div>
+            <button type="button" class="secondary" id="useMyLoc" style="margin-bottom: 12px;">Use my location</button>
+          </div>
+        </div>
+
+        <label for="evName">Event name</label>
+        <input id="evName" maxlength="60" placeholder="e.g. Sunset Music Festival" />
+        <div class="row3">
+          <div><label for="evExpected">Expected attendance</label><input id="evExpected" type="number" min="1" step="100" value="15000" /></div>
+          <div><label for="evDay">Day</label><select id="evDay"></select></div>
+          <div><label for="evTime">Start time</label><select id="evTime"></select></div>
+          <div><label for="evDur">Duration</label><select id="evDur"></select></div>
+        </div>
+        <div class="fine">Times are on the demo clock (Day 2 to Day 6).</div>
+        <div class="acts" style="display:flex; gap:10px;">
+          <button type="submit" id="evSave">Create event</button>
+          <button type="button" class="secondary" id="evCancel">Cancel</button>
+        </div>
+        <div id="evMsg" role="alert"></div>
+      </form>
+    </div>
+
+    <div class="card" id="planCard">
+      <h2>Floor plan</h2>
+      <div class="lead">
+        Upload your venue's floor plan (PNG, JPG, WebP or SVG, up to 8 MB), then put each gate where it really is:
+        drag a gate to move it, or switch to <b>Add gate</b> and click the plan. Colours show each gate's live state.
+      </div>
+      <div class="plan-tools">
+        <div class="seg" role="group" aria-label="Tool">
+          <button type="button" id="toolMove" aria-pressed="true">Move gates</button>
+          <button type="button" id="toolAdd" aria-pressed="false">Add gate</button>
+        </div>
+        <div class="grow"></div>
+        <input id="mapFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-label="Floor plan image" />
+        <button type="button" class="secondary" id="uploadBtn">Upload plan</button>
+        <button type="button" class="secondary" id="removePlanBtn">Remove plan</button>
+        <button type="button" class="secondary" id="suggestBtn" hidden>Read gates from my plan</button>
+      </div>
+      <div class="plan-layout">
+        <div>
+          <div id="plan" class="plan"></div>
+          <div class="legend">
+            <span><i style="background:var(--good)"></i>Open</span>
+            <span><i style="background:var(--warn)"></i>Busy</span>
+            <span><i style="background:var(--accent)"></i>Closed</span>
+            <span><i style="background:#555"></i>Out of service</span>
+            <span style="color:var(--ink-faint)">Arrow keys nudge a selected gate.</span>
+          </div>
+        </div>
+        <div id="gatePanel" class="gpanel"></div>
+      </div>
+      <div id="suggestBox" class="suggest" hidden></div>
+      <div id="planMsg" role="status" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Gates</h2>
+      <div class="lead">
+        Status is computed from live queue and exit load. Taking a gate out of service is for things like maintenance,
+        not for overriding the live reading. At least 4 gates must stay working.
+      </div>
+      <div id="gateList" class="grow-list"></div>
+    </div>
+
+    <div class="card" id="modelCard">
+      <h2>EventPulse AI model</h2>
+      <div class="lead">
+        A base model aligned through Nugen on EventPulse's own operations: its handbook and more than a hundred worked
+        situations from this system's engines. It writes the operator plans and attendee messages across the app. Every answer
+        is checked against the situation it was given; anything it can't back up is replaced by the playbook.
+      </div>
+      <div class="nconn" id="nconn"></div>
+      <div class="pipe" id="pipe"></div>
+      <div id="modelInfo" class="lead" style="margin-top: 10px;"></div>
+      <div id="livePlan"></div>
+    </div>
+
+    <div class="card" id="copilot">
+      <h2>Ask the copilot</h2>
+      <div class="lead">
+        Ask in plain words, for example "which zone is worst right now?" or "what if the match ends late and one gate closes?".
+        It reads the live model and runs the same what-if simulations as below. It cannot change anything: gates stay in your hands.
+      </div>
+      <div id="cpLog" class="cp-log" aria-live="polite"></div>
+      <div class="cp-chips" id="cpChips">
+        <button type="button" class="secondary">Where is the crowd worst right now?</button>
+        <button type="button" class="secondary">Which gate should I worry about?</button>
+        <button type="button" class="secondary">What if 3,000 extra people turn up?</button>
+        <button type="button" class="secondary">What if it rains 40 mm for 3 hours?</button>
+        <button type="button" class="secondary">Where can stranded visitors stay tonight?</button>
+        <button type="button" class="secondary">When is the next event?</button>
+      </div>
+      <form id="cpForm" class="cp-form">
+        <input id="cpQ" maxlength="600" autocomplete="off" placeholder="Ask about the venue or the city" aria-label="Question for the copilot" />
+        <button type="submit" id="cpSend">Ask</button>
+      </form>
+      <div id="cpMsg" role="status" style="margin-top: 8px;"></div>
+    </div>
+
+    <div class="card" id="whatif">
+      <h2>What-if simulator</h2>
+      <div class="lead">
+        Test a disruption before it happens. Nothing here changes the live venue: each run works on a copy of the data.
+        Results use the hour set at the top of this page.
+      </div>
+      <div class="seg" role="group" aria-label="Scenario">
+        <button type="button" data-scen="cancel" aria-pressed="true">Cancel an event</button>
+        <button type="button" data-scen="surge" aria-pressed="false">Demand surge</button>
+        <button type="button" data-scen="link" aria-pressed="false">Close a transport link</button>
+        <button type="button" data-scen="move" aria-pressed="false">Redirect visitors</button>
+      </div>
+
+      <div class="simctl">
+        <div id="pEvent">
+          <label for="simEvent">Event</label>
+          <select id="simEvent"></select>
+        </div>
+        <div id="pSurge" class="hidden">
+          <label for="simExtra">Extra unexpected visitors</label>
+          <input id="simExtra" type="number" min="500" max="100000" step="500" value="10000" />
+        </div>
+        <div id="pLink" class="hidden">
+          <label for="simLink">Link to close</label>
+          <select id="simLink"></select>
+        </div>
+        <div id="pMove" class="hidden">
+          <label for="simZone">Move visitors out of</label>
+          <select id="simZone"></select>
+          <label for="simMove">Visitors to redirect: <b id="simMoveN">600</b></label>
+          <input id="simMove" type="range" min="100" max="2500" step="100" value="600" />
+          <label for="simComp">Share who follow the guidance</label>
+          <select id="simComp">
+            <option value="0.5">50%</option><option value="0.75" selected>75%</option><option value="0.9">90%</option><option value="1">100%</option>
+          </select>
+        </div>
+        <button type="button" id="simRun">Run simulation</button>
+        <div id="simMsg"></div>
+      </div>
+      <div class="simres hidden" id="simResult"></div>
+    </div>
+
+    <div class="card" id="fieldCard">
+      <h2>Field reports for the weather twin</h2>
+      <div class="lead">
+        Tell the weather twin what your team is seeing. A flooded street raises that zone's flood estimate straight away
+        (the report fades over six hours); a measured transport load teaches the model how much rain really changes demand.
+        Both are kept, so the model keeps what it learned. <a href="twin.html?weather=whatif" target="_blank" rel="noopener">Open the weather twin</a>
+      </div>
+      <div class="field-grid">
+        <div>
+          <label for="frZone">Zone</label>
+          <select id="frZone"></select>
+          <div class="btnrow">
+            <button type="button" id="frFlooded">It's flooded</button>
+            <button type="button" class="secondary" id="frClear">It's clear</button>
+          </div>
+        </div>
+        <div>
+          <label for="frLink">Transport link</label>
+          <select id="frLink"></select>
+          <label for="frLoad">Measured load, % of capacity</label>
+          <div class="btnrow">
+            <input id="frLoad" type="number" min="1" max="400" step="1" placeholder="e.g. 85" />
+            <button type="button" id="frSendLoad">Report load</button>
+          </div>
+        </div>
+      </div>
+      <div id="frMsg" role="status"></div>
+      <div id="frModel" class="lead" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="card" id="partnerCard">
+      <h2>Partner access</h2>
+      <div class="lead">
+        For the platform that sells your tickets. Give its developers a key and they can list your events, read live
+        conditions, and create each ticket buyer's personal live link to put in their own ticket email or app.
+        A key reaches only the events at your venues. <a href="partners.html" target="_blank" rel="noopener">Developer guide</a>
+      </div>
+      <form id="keyForm" class="keyform">
+        <input id="keyLabel" maxlength="60" autocomplete="off" placeholder="What will use it, e.g. Ticketing app (production)" aria-label="Key name" />
+        <button type="submit" id="keyCreate">Create key</button>
+      </form>
+      <div id="keyMsg" role="status"></div>
+      <div id="newKey" class="newkey" hidden></div>
+      <div id="keyList" style="margin-top: 10px;"></div>
+    </div>
+
+  </div>
+
+</main>
+
+<script src="vendor/maplibre-gl.js"></script>
+<script>
+const API = location.port === "8080" ? "http://127.0.0.1:8000" : "";
+const $ = (id) => document.getElementById(id);
+// Signed in once, stays signed in (until "Sign out" or the 30-day token expires). A
+// sign-in from before this change lived in sessionStorage; carry it over.
+function orgStore(key, val) {
+  try {
+    if (val === undefined) {
+      const v = localStorage.getItem(key) || sessionStorage.getItem(key);
+      if (v && !localStorage.getItem(key)) { localStorage.setItem(key, v); sessionStorage.removeItem(key); }
+      return v;
+    }
+    if (val === null) { localStorage.removeItem(key); sessionStorage.removeItem(key); } else localStorage.setItem(key, val);
+  } catch (e) { /* storage blocked: signed in for this page only */ }
+  return null;
+}
+let TOKEN = orgStore("eventpulse_organizer_token") || null;
+
+function badgeClass(status) {
+  return status === "open" ? "open" : status === "restricted" ? "restricted" : "closed";
+}
+
+function showTab(name) {
+  const up = name === "up";
+  document.getElementById("tabIn").setAttribute("aria-selected", String(!up));
+  document.getElementById("tabUp").setAttribute("aria-selected", String(up));
+  document.getElementById("formIn").hidden = up;
+  document.getElementById("formUp").hidden = !up;
+  document.getElementById("loginErr").textContent = "";
+}
+
+// POST JSON to an auth endpoint. A host with no backend answers 404/405 with HTML,
+// which must read as "unavailable", not as a wrong password.
+async function authPost(path, body) {
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { return { unreachable: true }; }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* not JSON */ }
+  if (data === null && (res.status === 404 || res.status === 405 || res.status >= 500)) return { unreachable: true };
+  return { ok: res.ok, data };
+}
+
+function finishAuth(data) {
+  TOKEN = data.token;
+  try {
+    orgStore("eventpulse_organizer_token", TOKEN);
+    orgStore("eventpulse_organizer_who", data.name ? `${data.name} \u00B7 ${data.email}` : data.email);
+  } catch (e) { /* signed in for this page only */ }
+  showApp(data.name ? `${data.name} \u00B7 ${data.email}` : data.email);
+}
+
+async function doLogin(e) {
+  if (e) e.preventDefault();
+  const email = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const errEl = document.getElementById("loginErr");
+  errEl.textContent = "";
+  if (!email || !password) { errEl.textContent = "Enter your email and password."; return; }
+
+  document.getElementById("inBtn").disabled = true;
+  const r = await authPost("/auth/login", { role: "organizer", email, password });
+  document.getElementById("inBtn").disabled = false;
+  if (r.unreachable) { errEl.textContent = "Sign-in needs the live API, which isn't reachable here."; return; }
+  if (!r.ok) { errEl.textContent = (r.data && r.data.detail) || "Could not sign in."; return; }
+  document.getElementById("loginPassword").value = "";
+  finishAuth(r.data);
+}
+
+async function doSignup(e) {
+  if (e) e.preventDefault();
+  const name = document.getElementById("upName").value.trim();
+  const email = document.getElementById("upEmail").value.trim();
+  const password = document.getElementById("upPass").value;
+  const code = document.getElementById("upCode").value.trim();
+  const errEl = document.getElementById("loginErr");
+  errEl.textContent = "";
+  if (!name) { errEl.textContent = "Enter your name."; return; }
+  if (!email) { errEl.textContent = "Enter your email."; return; }
+  if (password.length < 8) { errEl.textContent = "Choose a password of at least 8 characters."; return; }
+  if (!document.getElementById("codeRow").hidden && !code) { errEl.textContent = "Enter the organiser access code."; return; }
+
+  document.getElementById("upBtn").disabled = true;
+  const r = await authPost("/auth/signup", { role: "organizer", name, email, password, access_code: code });
+  document.getElementById("upBtn").disabled = false;
+  if (r.unreachable) { errEl.textContent = "Sign-up needs the live API, which isn't reachable here."; return; }
+  if (!r.ok) { errEl.textContent = (r.data && r.data.detail) || "Could not create the account."; return; }
+  document.getElementById("upPass").value = "";
+  finishAuth(r.data);
+}
+
+document.getElementById("tabIn").addEventListener("click", () => showTab("in"));
+document.getElementById("tabUp").addEventListener("click", () => showTab("up"));
+document.getElementById("formIn").addEventListener("submit", doLogin);
+document.getElementById("formUp").addEventListener("submit", doSignup);
+if (location.hostname === "127.0.0.1" || location.hostname === "localhost") document.getElementById("demoHint").hidden = false;
+if (new URLSearchParams(location.search).get("tab") === "signup") showTab("up");
+fetch(`${API}/auth/config`).then((r) => (r.ok ? r.json() : null)).then((c) => {
+  if (c && c.organizer_access_code_required) document.getElementById("codeRow").hidden = false;
+}).catch(() => { /* no API here; sign-up will say so */ });
+
+function doLogout() {
+  TOKEN = null;
+  orgStore("eventpulse_organizer_token", null); orgStore("eventpulse_organizer_who", null);
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("loginCard").classList.remove("hidden");
+  document.getElementById("who").textContent = "";
+}
+
+function showApp(email) {
+  document.getElementById("loginCard").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("who").textContent = email || "Signed in";
+  loadVenues();
+  loadSimMeta();
+  loadKeys();
+  loadFieldReports();
+  loadModelCard();
+}
+
+// An expired or non-organiser token should return you to sign-in, not leave
+// you clicking controls that silently fail.
+function authFailed(res) {
+  if (res.status === 401 || res.status === 403) {
+    doLogout();
+    document.getElementById("loginErr").textContent = "Your session has ended. Please sign in again.";
+    return true;
+  }
+  return false;
+}
+
+function authHeaders() {
+  return { "Content-Type": "application/json", "Authorization": `Bearer ${TOKEN}` };
+}
+
+// ------------------------------------------------------------------ state
+let venues = [];          // venues this organiser can edit
+let cur = null;           // the selected venue
+let gates = [];           // its gates, with live status
+let selectedId = null;
+let draft = null;         // a gate being placed, not yet saved
+let tool = "move";
+let hasPlanImage = false;
+let cityCentre = null;
+const planMsg = (t, kind) => { const m = $("planMsg"); m.textContent = t || ""; m.className = kind || ""; };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const round1 = (v) => Math.round(v * 10) / 10;
+const dayLabel = (h) => `Day ${Math.floor(h / 24) + 1}`;
+const timeLabel = (h) => `${String(h % 24).padStart(2, "0")}:00`;
+
+async function api(path, method, body) {
+  const headers = { Authorization: `Bearer ${TOKEN}` };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  let res;
+  try { res = await fetch(API + path, { method: method || "GET", headers, body: body !== undefined ? JSON.stringify(body) : undefined }); }
+  catch (e) { return { ok: false, status: 0, data: null, offline: true }; }
+  if (authFailed(res)) return { ok: false, status: res.status, data: null, ended: true };
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* no body */ }
+  return { ok: res.ok, status: res.status, data };
+}
+
+// ------------------------------------------------------------- venues
+async function loadVenues(selectZone) {
+  const r = await api("/organizer/venues");
+  if (r.ended) return;
+  if (!r.ok) { $("venueMeta").textContent = r.offline ? "Could not reach the API." : "Could not load your venues."; return; }
+  venues = r.data;
+  const sel = $("venueSelect");
+  sel.textContent = "";
+  venues.forEach((v) => {
+    const o = document.createElement("option");
+    o.value = v.venue_zone_id; o.textContent = `${v.venue_name}${v.owned ? " (yours)" : " (shared demo)"}`;
+    sel.appendChild(o);
+  });
+  const want = selectZone || (cur && cur.venue_zone_id);
+  if (want && venues.some((v) => v.venue_zone_id === want)) sel.value = want;
+  // Prefer one of the organiser's own venues over a shared demo one.
+  else if (venues.some((v) => v.owned)) sel.value = venues.find((v) => v.owned).venue_zone_id;
+  await loadVenue();
+}
+
+async function loadVenue() {
+  cur = venues.find((v) => v.venue_zone_id === $("venueSelect").value) || null;
+  if (!cur) return;
+  selectedId = null; draft = null; proposals = [];
+  $("venueMeta").textContent = cur.owned
+    ? `Your venue. Capacity ${cur.capacity ? cur.capacity.toLocaleString() : "n/a"}, ${cur.gate_count} gates.`
+    : "A shared demo venue: any organiser can edit it. Create your own venue below for a private one.";
+  $("evWhereName").textContent = cur.venue_name;
+  renderEvents();
+  await Promise.all([loadGates(), probePlanImage()]);
+  renderAll(); renderSuggest();
+}
+
+async function loadGates() {
+  if (!cur) return;
+  const hour = $("hourInput").value || 106;
+  try { gates = await fetch(`${API}/gates?venue_zone_id=${cur.venue_zone_id}&hour=${hour}`).then((r) => r.json()); }
+  catch (e) { gates = []; planMsg("Could not load the gates.", "err"); }
+}
+
+function probePlanImage() {
+  return new Promise((resolve) => {
+    if (!cur) { resolve(); return; }
+    const img = new Image();
+    img.onload = () => { hasPlanImage = true; planAspect = img.naturalWidth / img.naturalHeight; resolve(); };
+    img.onerror = () => { hasPlanImage = false; planAspect = 3 / 2; resolve(); };
+    img.src = `${API}/organizer/venues/${cur.venue_zone_id}/map?t=${Date.now()}`;
+  });
+}
+let planAspect = 3 / 2;
+
+// ------------------------------------------------------------- events
+function renderEvents() {
+  const box = $("eventList");
+  box.textContent = "";
+  if (!cur || !cur.events.length) { box.appendChild(txt("div", "No events at this venue yet.", "fine")); return; }
+  cur.events.forEach((e) => {
+    const row = document.createElement("div"); row.className = "evrow";
+    const left = document.createElement("div");
+    left.appendChild(txt("div", e.name, "nm"));
+    left.appendChild(txt("div", `${dayLabel(e.start_hour)} ${timeLabel(e.start_hour)}–${timeLabel(e.end_hour)} · ${nfmt(e.expected_attendance)} expected`, "mt"));
+    row.appendChild(left);
+    const acts = document.createElement("div"); acts.className = "acts";
+    [["Preview arrivals", e.start_hour - 1], ["Preview exit", e.end_hour + 1]].forEach(([label, h]) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "secondary small"; b.textContent = label;
+      b.addEventListener("click", () => { $("hourInput").value = clamp(h, 24, 143); refreshLive(); });
+      acts.appendChild(b);
+    });
+    row.appendChild(acts);
+    box.appendChild(row);
+  });
+}
+
+function fillTimeSelects() {
+  const d = $("evDay"), t = $("evTime"), du = $("evDur");
+  if (d.options.length) return;
+  for (let day = 2; day <= 6; day++) d.appendChild(new Option(`Day ${day}`, String((day - 1) * 24)));
+  for (let h = 0; h < 24; h++) t.appendChild(new Option(timeLabel(h), String(h)));
+  for (let n = 1; n <= 8; n++) du.appendChild(new Option(`${n} hour${n > 1 ? "s" : ""}`, String(n)));
+  d.value = String(4 * 24); t.value = "18"; du.value = "3";
+}
+
+let pickMap = null, pickMarker = null;
+
+function setPin(lng, lat, fly) {
+  $("evLat").value = lat.toFixed(5); $("evLng").value = lng.toFixed(5);
+  if (pickMap) {
+    if (!pickMarker) pickMarker = new maplibregl.Marker({ color: "#FF3B1F" }).setLngLat([lng, lat]).addTo(pickMap);
+    else pickMarker.setLngLat([lng, lat]);
+    if (fly) pickMap.easeTo({ center: [lng, lat], zoom: Math.max(pickMap.getZoom(), 13) });
+  }
+}
+
+async function initPickMap() {
+  if (pickMap || typeof maplibregl === "undefined") return;
+  if (!cityCentre) {
+    try {
+      const z = await fetch(`${API}/zones?hour=100`).then((r) => r.json());
+      cityCentre = [z.reduce((a, q) => a + q.lng, 0) / z.length, z.reduce((a, q) => a + q.lat, 0) / z.length];
+    } catch (e) { cityCentre = [72.86, 19.07]; }
+  }
+  try {
+    const style = await fetch("https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json").then((r) => r.json());
+    pickMap = new maplibregl.Map({ container: "pickMap", style, center: cityCentre, zoom: 11.2, attributionControl: { compact: true } });
+    pickMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    pickMap.on("click", (e) => setPin(e.lngLat.lng, e.lngLat.lat, false));
+  } catch (e) {
+    pickMap = null;
+    $("pickMap").textContent = "The map couldn't load. Type the latitude and longitude instead.";
+    $("pickMap").style.padding = "16px"; $("pickMap").style.color = "var(--ink-dim)";
+  }
+}
+
+function openEventForm() {
+  fillTimeSelects();
+  $("eventForm").classList.remove("hidden");
+  $("newEventBtn").hidden = true;
+  const hasOwn = !!cur;
+  $("evWhereOld").disabled = !hasOwn;
+  syncWhere();
+  initPickMap();
+  $("evName").focus();
+}
+function closeEventForm() { $("eventForm").classList.add("hidden"); $("newEventBtn").hidden = false; $("evMsg").textContent = ""; }
+function syncWhere() {
+  const fresh = $("evWhereNew").checked;
+  $("newVenueFields").classList.toggle("hidden", !fresh);
+  if (fresh && pickMap) setTimeout(() => pickMap.resize(), 30);
+}
+
+async function submitEvent(e) {
+  e.preventDefault();
+  const msg = $("evMsg"); msg.className = "err"; msg.textContent = "";
+  const fresh = $("evWhereNew").checked;
+  const start = Number($("evDay").value) + Number($("evTime").value);
+  const body = {
+    name: $("evName").value.trim(), expected_attendance: Number($("evExpected").value),
+    start_hour: start, end_hour: start + Number($("evDur").value),
+  };
+  if (!body.name) { msg.textContent = "Give the event a name."; return; }
+  if (!(body.expected_attendance > 0)) { msg.textContent = "Enter the expected attendance."; return; }
+  if (body.end_hour > 143) { msg.textContent = "That runs past the end of the demo clock (Day 6 23:00). Start earlier or shorten it."; return; }
+  if (fresh) {
+    body.venue_name = $("evVenueName").value.trim(); body.venue_capacity = Number($("evCapacity").value);
+    body.lat = parseFloat($("evLat").value); body.lng = parseFloat($("evLng").value);
+    if (!body.venue_name) { msg.textContent = "Give the venue a name."; return; }
+    if (!Number.isFinite(body.lat) || !Number.isFinite(body.lng)) { msg.textContent = "Click the map to place the venue."; return; }
+  } else {
+    body.venue_zone_id = cur.venue_zone_id;
+  }
+
+  $("evSave").disabled = true;
+  const r = await api("/organizer/events", "POST", body);
+  $("evSave").disabled = false;
+  if (r.ended) return;
+  if (!r.ok) { msg.textContent = (r.data && r.data.detail) || (r.offline ? "Could not reach the API." : "Could not create the event."); return; }
+
+  closeEventForm();
+  $("evName").value = ""; $("evVenueName").value = "";
+  $("hourInput").value = clamp(body.end_hour + 1, 24, 143);
+  await loadVenues(r.data.venue_zone_id);
+  planMsg(r.data.created_venue
+    ? `Created ${body.name} at a new venue with ${cur.gate_count} starter gates. Now arrange them on the floor plan below.`
+    : `Created ${body.name}.`, "ok");
+  $("planCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ---------------------------------------------------------- floor plan
+const SCHEMATIC = `
+<svg class="schem" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+  <rect width="100" height="100" fill="#0e1013"/>
+  <ellipse cx="50" cy="50" rx="42" ry="40" fill="none" stroke="#2a2f36" stroke-width=".5" stroke-dasharray="1.5 1.5"/>
+  <ellipse cx="50" cy="50" rx="31" ry="28" fill="#15201a" stroke="#2f4a3a" stroke-width=".6"/>
+  <ellipse cx="50" cy="50" rx="15" ry="12" fill="none" stroke="#2f4a3a" stroke-width=".5"/>
+  <text x="50" y="51" fill="#4b6b58" font-size="3.4" text-anchor="middle" font-family="sans-serif">Seating bowl</text>
+  <text x="50" y="97" fill="#4a4f57" font-size="2.6" text-anchor="middle" font-family="sans-serif">Generic plan. Upload yours to place gates exactly.</text>
+</svg>`;
+
+function gateClass(g) {
+  if (g.status && g.status !== "open") return "oos";
+  const l = g.live_status || "open";
+  return l === "restricted" ? "restricted" : l === "closed" ? "closed" : "open";
+}
+
+function renderPlan() {
+  const plan = $("plan");
+  plan.textContent = "";
+  plan.style.aspectRatio = String(planAspect);
+  plan.style.maxWidth = `min(100%, calc(72vh * ${planAspect}))`;
+  plan.classList.toggle("adding", tool === "add");
+
+  if (hasPlanImage && cur) {
+    const img = document.createElement("img");
+    img.className = "bg"; img.alt = ""; img.draggable = false;
+    img.src = `${API}/organizer/venues/${cur.venue_zone_id}/map?t=${planStamp}`;
+    plan.appendChild(img);
+  } else {
+    plan.insertAdjacentHTML("beforeend", SCHEMATIC);
+  }
+
+  gates.forEach((g, i) => plan.appendChild(gateEl(g, i + 1, false)));
+  if (draft) plan.appendChild(gateEl(draft, "+", true));
+  proposals.forEach((g, i) => plan.appendChild(ghostEl(g, i)));
+}
+let planStamp = Date.now();
+
+function gateEl(g, label, isDraft) {
+  const el = document.createElement("div");
+  el.className = `gate ${isDraft ? "draft" : gateClass(g)}${(isDraft ? draft === g : g.gate_id === selectedId) ? " selected" : ""}`;
+  el.style.left = `${g.x}%`; el.style.top = `${g.y}%`;
+  el.tabIndex = 0; el.setAttribute("role", "button");
+  el.setAttribute("aria-label", isDraft ? "New gate, not saved yet" : `${g.name}, ${gateClass(g) === "oos" ? "out of service" : g.live_status || "open"}`);
+  el.dataset.id = isDraft ? "" : g.gate_id;
+  el.appendChild(document.createTextNode(String(label)));
+  el.appendChild(txt("span", g.name, "lbl"));
+
+  el.addEventListener("pointerdown", (e) => startDrag(e, g, el, isDraft));
+  el.addEventListener("keydown", (e) => gateKey(e, g, isDraft));
+  el.addEventListener("click", (e) => e.stopPropagation());
+  return el;
+}
+
+function planPoint(e) {
+  const r = $("plan").getBoundingClientRect();
+  return { x: round1(clamp(((e.clientX - r.left) / r.width) * 100, 0, 100)), y: round1(clamp(((e.clientY - r.top) / r.height) * 100, 0, 100)) };
+}
+
+let drag = null;
+function startDrag(e, g, el, isDraft) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  select(isDraft ? null : g.gate_id, isDraft);
+  // Selecting redraws the whole plan, which detaches the element that was pressed.
+  // Drag the fresh copy instead, or the pointer events go to a gate no longer on screen.
+  el = isDraft ? $("plan").querySelector(".gate.draft") : $("plan").querySelector(`.gate[data-id="${g.gate_id}"]`);
+  if (!el) return;
+  drag = { g, el, isDraft, moved: false, sx: e.clientX, sy: e.clientY, ox: g.x, oy: g.y };
+  try { el.setPointerCapture(e.pointerId); } catch (err) { /* not fatal */ }
+  el.classList.add("dragging");
+  el.onpointermove = (ev) => {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 4) return;
+    drag.moved = true;
+    const p = planPoint(ev);
+    g.x = p.x; g.y = p.y;
+    el.style.left = `${p.x}%`; el.style.top = `${p.y}%`;
+    updatePos();
+  };
+  el.onpointerup = el.onpointercancel = async () => {
+    el.onpointermove = el.onpointerup = el.onpointercancel = null;
+    el.classList.remove("dragging");
+    const d = drag; drag = null;
+    if (!d || !d.moved) return;
+    if (d.isDraft) { updatePos(); return; }
+    await saveGate(g.gate_id, { x: g.x, y: g.y }, { x: d.ox, y: d.oy });
+  };
+}
+
+let nudgeTimer = null;
+function gateKey(e, g, isDraft) {
+  const step = e.shiftKey ? 5 : 0.5;
+  const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+  if (d) {
+    e.preventDefault();
+    const before = { x: g.x, y: g.y };
+    g.x = round1(clamp(g.x + d[0], 0, 100)); g.y = round1(clamp(g.y + d[1], 0, 100));
+    const el = e.currentTarget; el.style.left = `${g.x}%`; el.style.top = `${g.y}%`;
+    updatePos();
+    if (!isDraft) { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => saveGate(g.gate_id, { x: g.x, y: g.y }, before), 450); }
+  } else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(isDraft ? null : g.gate_id, isDraft); }
+}
+
+$("plan").addEventListener("click", (e) => {
+  if (tool === "add") {
+    const p = planPoint(e);
+    draft = { name: `Gate ${gates.length + 1}`, x: p.x, y: p.y, entry_capacity_per_hour: avgCap("entry_capacity_per_hour"), exit_capacity_per_hour: avgCap("exit_capacity_per_hour") };
+    selectedId = null; renderPlan(); renderPanel();
+    const n = $("gName"); if (n) { n.focus(); n.select(); }
+  } else if (selectedId || draft) { select(null); }
+});
+
+function avgCap(k) { return gates.length ? Math.round(gates.reduce((a, g) => a + g[k], 0) / gates.length / 100) * 100 || 1000 : 2000; }
+
+function select(id, isDraft) {
+  selectedId = id || null;
+  if (!isDraft && id) draft = null;
+  renderPlan(); renderPanel(); renderGateList();
+}
+
+async function saveGate(id, changes, revert) {
+  planMsg("Saving...");
+  const r = await api(`/organizer/gates/${id}`, "PATCH", changes);
+  if (r.ended) return;
+  if (!r.ok) {
+    planMsg((r.data && r.data.detail) || "Could not save that change.", "err");
+    const g = gates.find((q) => q.gate_id === id);
+    if (g && revert) { Object.assign(g, revert); }
+    renderPlan(); renderPanel(); return;
+  }
+  const g = gates.find((q) => q.gate_id === id);
+  if (g) Object.assign(g, { x: r.data.x, y: r.data.y, name: r.data.name, entry_capacity_per_hour: r.data.entry_capacity_per_hour, exit_capacity_per_hour: r.data.exit_capacity_per_hour });
+  planMsg("Saved.", "ok");
+  renderPlan(); renderPanel(); renderGateList();
+}
+
+function updatePos() { const p = $("gPos"); const g = draft && !selectedId ? draft : gates.find((q) => q.gate_id === selectedId); if (p && g) p.textContent = `Position: ${g.x}% across, ${g.y}% down`; }
+
+function field(id, label, value, type, attrs) {
+  const wrap = document.createElement("div");
+  const l = document.createElement("label"); l.htmlFor = id; l.textContent = label;
+  const i = document.createElement("input"); i.id = id; i.type = type || "text"; i.value = value;
+  Object.entries(attrs || {}).forEach(([k, v]) => i.setAttribute(k, v));
+  wrap.appendChild(l); wrap.appendChild(i);
+  return wrap;
+}
+function btn(text, cls, fn) { const b = document.createElement("button"); b.type = "button"; b.textContent = text; if (cls) b.className = cls; b.addEventListener("click", fn); return b; }
+
+function renderPanel() {
+  const box = $("gatePanel");
+  box.textContent = "";
+  const g = selectedId ? gates.find((q) => q.gate_id === selectedId) : null;
+
+  if (draft && !g) {
+    box.appendChild(txt("h3", "New gate"));
+    box.appendChild(txt("div", "Set its name and capacity, drag it to fine-tune, then add it.", "ph"));
+    box.appendChild(field("gName", "Name", draft.name, "text", { maxlength: 40 }));
+    box.appendChild(field("gEntry", "Entry capacity per hour", draft.entry_capacity_per_hour, "number", { min: 100, max: 200000, step: 100 }));
+    box.appendChild(field("gExit", "Exit capacity per hour", draft.exit_capacity_per_hour, "number", { min: 100, max: 200000, step: 100 }));
+    box.appendChild(txt("div", "", "pos")).id = "gPos"; updatePos();
+    const acts = document.createElement("div"); acts.className = "acts";
+    acts.appendChild(btn("Add gate", "", async () => {
+      const body = { name: $("gName").value.trim(), entry_capacity_per_hour: Number($("gEntry").value), exit_capacity_per_hour: Number($("gExit").value), x: draft.x, y: draft.y };
+      const r = await api(`/organizer/venues/${cur.venue_zone_id}/gates`, "POST", body);
+      if (r.ended) return;
+      if (!r.ok) { planMsg((r.data && r.data.detail) || "Could not add the gate.", "err"); return; }
+      draft = null; planMsg(`Added ${r.data.name}.`, "ok"); setTool("move"); await refreshVenueCounts(); await loadGates(); selectedId = r.data.gate_id; renderAll();
+    }));
+    acts.appendChild(btn("Cancel", "secondary", () => { draft = null; renderPlan(); renderPanel(); }));
+    box.appendChild(acts);
+    return;
+  }
+
+  if (!g) {
+    box.appendChild(txt("h3", "Gate details"));
+    box.appendChild(txt("div", tool === "add" ? "Click the plan where the new gate goes." : "Select a gate on the plan to rename it, change its capacity, take it out of service or delete it.", "ph"));
+    return;
+  }
+
+  box.appendChild(txt("h3", g.name));
+  box.appendChild(txt("div", gateClass(g) === "oos" ? "Out of service" : `Live: ${g.live_status || "open"}${g.phase && g.phase !== "idle" ? `, ${g.phase} at ${Math.round(Math.min(100, g.load_pct != null ? g.load_pct : g.load_ratio * 100))}% of capacity${g.redirect_to && g.redirect_to.length ? `, redirecting to ${g.redirect_to.map((t) => t.name).join(", ")}` : ""}` : ""}`, "ph"));
+  box.appendChild(field("gName", "Name", g.name, "text", { maxlength: 40 }));
+  box.appendChild(field("gEntry", "Entry capacity per hour", g.entry_capacity_per_hour, "number", { min: 100, max: 200000, step: 100 }));
+  box.appendChild(field("gExit", "Exit capacity per hour", g.exit_capacity_per_hour, "number", { min: 100, max: 200000, step: 100 }));
+  box.appendChild(txt("div", "", "pos")).id = "gPos"; updatePos();
+  const acts = document.createElement("div"); acts.className = "acts";
+  acts.appendChild(btn("Save changes", "", () => saveGate(g.gate_id, {
+    name: $("gName").value.trim(), entry_capacity_per_hour: Number($("gEntry").value), exit_capacity_per_hour: Number($("gExit").value),
+  })));
+  const oos = g.status && g.status !== "open";
+  acts.appendChild(btn(oos ? "Restore" : "Take out of service", "secondary", () => toggleGate(g.gate_id, oos ? "open" : "closed")));
+  acts.appendChild(btn("Delete", "danger", () => removeGate(g)));
+  box.appendChild(acts);
+}
+
+async function toggleGate(id, status) {
+  const r = await api(`/organizer/gates/${id}/status`, "POST", { status });
+  if (r.ended) return;
+  if (!r.ok) { planMsg((r.data && r.data.detail) || "Could not update the gate.", "err"); return; }
+  planMsg(status === "open" ? "Gate restored." : "Gate taken out of service.", "ok");
+  await loadGates(); renderAll();
+}
+
+async function removeGate(g) {
+  if (!confirm(`Delete ${g.name}? Its concourse goes with it. This can't be undone.`)) return;
+  const r = await api(`/organizer/gates/${g.gate_id}`, "DELETE");
+  if (r.ended) return;
+  if (!r.ok) { planMsg((r.data && r.data.detail) || "Could not delete the gate.", "err"); return; }
+  selectedId = null; planMsg(`Deleted ${g.name}.`, "ok");
+  await refreshVenueCounts(); await loadGates(); renderAll();
+}
+
+async function refreshVenueCounts() {
+  const r = await api("/organizer/venues");
+  if (r.ok) { venues = r.data; cur = venues.find((v) => v.venue_zone_id === cur.venue_zone_id) || cur; $("venueMeta").textContent = cur.owned ? `Your venue. Capacity ${cur.capacity ? cur.capacity.toLocaleString() : "n/a"}, ${cur.gate_count} gates.` : $("venueMeta").textContent; }
+}
+
+function setTool(t) {
+  tool = t;
+  $("toolMove").setAttribute("aria-pressed", String(t === "move")); $("toolAdd").setAttribute("aria-pressed", String(t === "add"));
+  if (t === "move") draft = null;
+  renderPlan(); renderPanel();
+}
+
+function renderGateList() {
+  const el = $("gateList");
+  el.textContent = "";
+  gates.forEach((g, i) => {
+    const row = document.createElement("div");
+    row.className = "gate-row" + (g.gate_id === selectedId ? " sel" : "");
+    row.tabIndex = 0; row.setAttribute("role", "button");
+    const left = document.createElement("div");
+    left.appendChild(txt("div", `${i + 1}. ${g.name}`, "name"));
+    const flow = g.phase && g.phase !== "idle";
+    left.appendChild(txt("div", `in ${nfmt(g.entry_capacity_per_hour)}/hr · out ${nfmt(g.exit_capacity_per_hour)}/hr${flow ? ` · ${g.phase} at ${Math.round(Math.min(100, g.load_pct != null ? g.load_pct : g.load_ratio * 100))}% of capacity` : ""}${g.status !== "open" ? " · out of service" : ""}`, "note"));
+    row.appendChild(left);
+    const cls = gateClass(g);
+    const badge = document.createElement("span");
+    badge.className = `badge ${cls === "oos" ? "closed" : badgeClass(g.live_status)}`;
+    badge.textContent = cls === "oos" ? "out of service" : (g.live_status || "open");
+    row.appendChild(badge);
+    row.addEventListener("click", () => { select(g.gate_id); $("planCard").scrollIntoView({ behavior: "smooth", block: "nearest" }); });
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(g.gate_id); } });
+    el.appendChild(row);
+  });
+}
+
+function renderAll() { renderPlan(); renderPanel(); renderGateList(); syncSuggest(); }
+
+async function refreshLive() { await loadGates(); renderAll(); }
+
+async function uploadMap() {
+  const f = $("mapFile").files[0];
+  if (!f) { planMsg("Choose an image first.", "err"); return; }
+  const form = new FormData(); form.append("file", f);
+  planMsg("Uploading...");
+  let res;
+  try { res = await fetch(`${API}/organizer/venues/${cur.venue_zone_id}/map`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: form }); }
+  catch (e) { planMsg("Could not reach the API.", "err"); return; }
+  if (authFailed(res)) return;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { planMsg(data.detail || "Upload failed.", "err"); return; }
+  $("mapFile").value = ""; planStamp = Date.now(); proposals = [];
+  await probePlanImage(); renderAll();
+  planMsg("Plan uploaded. Drag each gate to its real position.", "ok");
+}
+
+async function removePlan() {
+  if (!hasPlanImage) { planMsg("There's no uploaded plan to remove.", "err"); return; }
+  const r = await api(`/organizer/venues/${cur.venue_zone_id}/map`, "DELETE");
+  if (r.ended) return;
+  if (!r.ok) { planMsg((r.data && r.data.detail) || "Could not remove the plan.", "err"); return; }
+  planStamp = Date.now(); proposals = []; await probePlanImage(); renderAll(); renderSuggest(); planMsg("Plan removed.", "ok");
+}
+
+$("venueSelect").addEventListener("change", loadVenue);
+$("hourInput").addEventListener("change", refreshLive);
+$("signOutBtn").addEventListener("click", doLogout);
+$("newEventBtn").addEventListener("click", openEventForm);
+$("evCancel").addEventListener("click", closeEventForm);
+$("eventForm").addEventListener("submit", submitEvent);
+$("evWhereNew").addEventListener("change", syncWhere);
+$("evWhereOld").addEventListener("change", syncWhere);
+$("toolMove").addEventListener("click", () => setTool("move"));
+$("toolAdd").addEventListener("click", () => setTool("add"));
+$("uploadBtn").addEventListener("click", uploadMap);
+$("removePlanBtn").addEventListener("click", removePlan);
+$("useMyLoc").addEventListener("click", () => {
+  if (!navigator.geolocation) { $("evMsg").className = "err"; $("evMsg").textContent = "This browser can't share a location."; return; }
+  navigator.geolocation.getCurrentPosition(
+    (p) => setPin(p.coords.longitude, p.coords.latitude, true),
+    () => { $("evMsg").className = "err"; $("evMsg").textContent = "Couldn't get your location. Click the map instead."; },
+    { enableHighAccuracy: true, timeout: 10000 });
+});
+
+// ------------------------------------------------------------- AI: read gates from the plan
+let aiOn = false;
+let proposals = [];
+
+function syncSuggest() {
+  const b = $("suggestBtn");
+  b.hidden = !(hasPlanImage && cur);
+  b.disabled = !aiOn;
+  b.title = aiOn ? "Find the entrances on your plan and propose gates. You review them before anything is saved."
+                 : "Needs AI switched on for this site. Place the gates by hand instead.";
+}
+
+function ghostEl(g, i) {
+  const el = document.createElement("div");
+  el.className = "gate ghost";
+  el.style.left = `${g.x}%`; el.style.top = `${g.y}%`;
+  el.tabIndex = 0; el.setAttribute("role", "button");
+  el.setAttribute("aria-label", `Suggested gate ${g.name}. Press to add it.`);
+  el.appendChild(document.createTextNode("?"));
+  el.appendChild(txt("span", g.name, "lbl"));
+  const add = () => addProposal(i);
+  el.addEventListener("click", (e) => { e.stopPropagation(); add(); });
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); add(); } });
+  return el;
+}
+
+function renderSuggest() {
+  const box = $("suggestBox");
+  box.textContent = "";
+  box.hidden = !proposals.length;
+  if (!proposals.length) return;
+  box.appendChild(txt("h3", `${proposals.length} possible gate${proposals.length === 1 ? "" : "s"} found on your plan`));
+  const lead = txt("div", "Blue dashed markers on the plan. Nothing is saved until you add them, and you can move any gate afterwards.", "lead");
+  lead.style.margin = "0 0 8px";
+  box.appendChild(lead);
+  proposals.forEach((g, i) => {
+    const row = document.createElement("div"); row.className = "srow";
+    const name = document.createElement("div"); name.className = "grow";
+    name.appendChild(document.createTextNode(g.name + " "));
+    name.appendChild(txt("small", `(${g.x}, ${g.y})`));
+    const add = txt("button", "Add", "secondary"); add.type = "button";
+    add.addEventListener("click", () => addProposal(i));
+    const skip = txt("button", "Skip", "secondary"); skip.type = "button";
+    skip.addEventListener("click", () => { proposals.splice(i, 1); renderPlan(); renderSuggest(); });
+    row.append(name, add, skip);
+    box.appendChild(row);
+  });
+  const foot = document.createElement("div"); foot.style.cssText = "display:flex;gap:10px;margin-top:10px";
+  const all = txt("button", "Add all"); all.type = "button"; all.addEventListener("click", addAllProposals);
+  const no = txt("button", "Dismiss", "secondary"); no.type = "button";
+  no.addEventListener("click", () => { proposals = []; renderPlan(); renderSuggest(); });
+  foot.append(all, no); box.appendChild(foot);
+}
+
+function median(a, dflt) {
+  if (!a.length) return dflt;
+  const b = a.slice().sort((x, y) => x - y); return b[Math.floor(b.length / 2)];
+}
+
+async function addProposal(i) {
+  const g = proposals[i];
+  if (!g || !cur) return true;
+  const entry = median(gates.map((x) => x.entry_capacity_per_hour), 3000);
+  const exit = median(gates.map((x) => x.exit_capacity_per_hour), 4800);
+  const r = await api(`/organizer/venues/${cur.venue_zone_id}/gates`, "POST",
+    { name: g.name, x: g.x, y: g.y, entry_capacity_per_hour: entry, exit_capacity_per_hour: exit });
+  if (r.ended) return false;
+  if (!r.ok) { planMsg((r.data && r.data.detail) || "Could not add that gate.", "err"); return false; }
+  proposals.splice(i, 1);
+  await loadGates(); renderAll(); renderSuggest();
+  planMsg(`Added ${g.name}. Its capacity is a guess: set the real numbers in the gate panel.`, "ok");
+  return true;
+}
+
+async function addAllProposals() {
+  while (proposals.length) { if (!(await addProposal(0))) return; }
+}
+
+async function suggestGates() {
+  if (!cur) return;
+  const btn = $("suggestBtn"); btn.disabled = true; planMsg("Reading your plan...");
+  const r = await api(`/organizer/venues/${cur.venue_zone_id}/map/suggest`, "POST");
+  syncSuggest();
+  if (r.ended) return;
+  if (!r.ok) { planMsg((r.data && r.data.detail) || "Could not read the plan.", "err"); return; }
+  // Skip anything that sits on a gate you already have.
+  proposals = r.data.gates.filter((p) => !gates.some((g) => Math.abs(g.x - p.x) < 5 && Math.abs(g.y - p.y) < 5));
+  const skipped = r.data.gates.length - proposals.length;
+  renderPlan(); renderSuggest();
+  planMsg(proposals.length
+    ? `Found ${proposals.length} possible gate${proposals.length === 1 ? "" : "s"}${skipped ? ` (${skipped} already have a gate)` : ""}. Check them against the plan.`
+    : (r.data.gates.length ? "Every entrance it found already has a gate." : "It couldn't find any entrances on this plan. Place them by hand."), proposals.length || r.data.gates.length ? "ok" : "err");
+}
+
+// ------------------------------------------------------------- AI: copilot
+const cpHistory = [];
+function cpBubble(kind, text, note) {
+  const d = document.createElement("div"); d.className = `cp-msg ${kind}`; d.textContent = text;
+  if (note) d.appendChild(txt("small", note));
+  $("cpLog").appendChild(d); $("cpLog").scrollTop = $("cpLog").scrollHeight; return d;
+}
+
+async function askCopilot(q) {
+  q = (q || "").trim();
+  if (!q) return;
+  $("cpQ").value = ""; $("cpMsg").textContent = ""; $("cpMsg").className = "";
+  cpBubble("me", q);
+  const wait = cpBubble("ai", "Looking at the live model...");
+  $("cpSend").disabled = true;
+  const r = await api("/organizer/copilot", "POST", { question: q, history: cpHistory.slice(-6) });
+  $("cpSend").disabled = false;
+  wait.remove();
+  if (r.ended) return;
+  if (!r.ok) { $("cpMsg").className = "err"; $("cpMsg").textContent = r.offline ? "Could not reach the API." : ((r.data && r.data.detail) || "The copilot could not answer."); return; }
+  const used = (r.data.steps || []).map((x) => x.tool.replace(/_/g, " "));
+  const src = r.data.provider === "nugen" ? `EventPulse model on Nugen${r.data.confidence != null ? ` \u00B7 ${Math.round(r.data.confidence)}% confident` : ""}` : "";
+  const bubble = cpBubble("ai", r.data.answer, [used.length ? `Looked at: ${[...new Set(used)].join(", ")}` : "",
+    src || (r.data.provider === "eventpulse" ? "From live EventPulse data" : "")].filter(Boolean).join(" \u00B7 "));
+  cpHistory.push({ role: "user", content: q }, { role: "assistant", content: r.data.answer });
+  if (r.data.refine_id) nugenRefine(bubble, r.data.refine_id, API, TOKEN);
+}
+
+// The Nugen-aligned EventPulse model rewords the answer in the background. It is shown under
+// the answer only if it agrees with the live data; the answer above never waits for it.
+async function nugenRefine(bubble, id, api, token) {
+  const line = document.createElement("div"); line.className = "cp-nugen wait";
+  line.textContent = "EventPulse model on Nugen is thinking...";
+  bubble.appendChild(line);
+  try {
+    const res = await fetch(`${api}/copilot/refine`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id }) });
+    const d = await res.json();
+    if (d.ok) {
+      line.className = "cp-nugen";
+      line.textContent = "";
+      const b = document.createElement("b"); b.textContent = `EventPulse model on Nugen${d.confidence != null ? ` \u00B7 ${Math.round(d.confidence)}% confident` : ""}`;
+      line.appendChild(b); line.appendChild(document.createTextNode(d.text));
+    } else {
+      line.className = "cp-nugen off";
+      line.textContent = `EventPulse model on Nugen: not shown (${d.reason || "no answer"}).`;
+    }
+  } catch (e) { line.remove(); }
+}
+
+$("cpForm").addEventListener("submit", (e) => { e.preventDefault(); askCopilot($("cpQ").value); });
+$("cpChips").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") askCopilot(e.target.textContent); });
+$("suggestBtn").addEventListener("click", suggestGates);
+fetch(`${API}/ai/config`).then((r) => r.ok ? r.json() : null).then((c) => { aiOn = !!(c && c.enabled); syncSuggest(); }).catch(() => {});
+
+// ------------------------------------------------------------- partner API keys
+const keyMsg = (t, kind) => { const m = $("keyMsg"); m.textContent = t || ""; m.className = kind || ""; };
+const apiBase = () => (API || location.origin);
+
+function ago(ts) {
+  if (!ts) return "never used";
+  const m = Math.round((Date.now() / 1000 - ts) / 60);
+  return m < 1 ? "used just now" : m < 60 ? `used ${m} min ago` : m < 1440 ? `used ${Math.round(m / 60)} h ago` : `used ${Math.round(m / 1440)} d ago`;
+}
+
+async function loadKeys() {
+  const r = await api("/organizer/keys");
+  if (r.ended) return;
+  const box = $("keyList"); box.textContent = "";
+  if (!r.ok) { keyMsg(r.offline ? "Could not reach the API." : "Could not load your keys.", "err"); return; }
+  if (!r.data.length) { box.appendChild(txt("div", "No keys yet.", "lead")); return; }
+  r.data.forEach((k) => {
+    const row = document.createElement("div"); row.className = "keyrow" + (k.revoked ? " revoked" : "");
+    const info = document.createElement("div"); info.className = "grow";
+    info.appendChild(txt("b", k.label));
+    const meta = document.createElement("small");
+    meta.appendChild(txt("code", `${k.prefix}…`));
+    meta.appendChild(document.createTextNode(` · created ${new Date(k.created_at * 1000).toLocaleDateString()} · ${k.revoked ? "revoked" : ago(k.last_used_at)}`));
+    info.appendChild(meta);
+    row.appendChild(info);
+    if (!k.revoked) {
+      const b = txt("button", "Revoke", "secondary small"); b.type = "button";
+      b.addEventListener("click", () => revokeKey(k, b));
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  });
+}
+
+async function revokeKey(k, btn) {
+  if (btn.dataset.confirm !== "1") {            // two clicks: revoking breaks the partner's integration at once
+    btn.dataset.confirm = "1"; btn.textContent = "Click again to revoke";
+    setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ""; btn.textContent = "Revoke"; } }, 4000);
+    return;
+  }
+  const r = await api(`/organizer/keys/${encodeURIComponent(k.key_id)}`, "DELETE");
+  if (r.ended) return;
+  if (!r.ok) { keyMsg((r.data && r.data.detail) || "Could not revoke that key.", "err"); return; }
+  keyMsg(`Revoked "${k.label}". Anything using it stops working now; links already given to attendees keep working.`, "ok");
+  loadKeys();
+}
+
+async function createKey(e) {
+  e.preventDefault();
+  const label = $("keyLabel").value.trim();
+  if (!label) { keyMsg("Name the key first, so you know what uses it later.", "err"); return; }
+  $("keyCreate").disabled = true;
+  const r = await api("/organizer/keys", "POST", { label });
+  $("keyCreate").disabled = false;
+  if (r.ended) return;
+  if (!r.ok) { keyMsg((r.data && r.data.detail) || "Could not create a key.", "err"); return; }
+  $("keyLabel").value = ""; keyMsg("");
+  const box = $("newKey"); box.textContent = ""; box.hidden = false;
+  box.appendChild(txt("b", `Your new key for "${r.data.label}"`));
+  box.appendChild(txt("div", "Copy it now: it won't be shown again. Treat it like a password and keep it on your partner's server, never in a web page or app.", "lead"));
+  const line = document.createElement("div"); line.className = "k";
+  const code = txt("code", r.data.key); code.id = "newKeyValue";
+  const copy = txt("button", "Copy", "secondary small"); copy.type = "button";
+  copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(r.data.key); copy.textContent = "Copied"; }
+    catch (err) { const sel = getSelection(), rg = document.createRange(); rg.selectNodeContents(code); sel.removeAllRanges(); sel.addRange(rg); copy.textContent = "Selected: press Ctrl/Cmd+C"; }
+  });
+  const done = txt("button", "I've saved it", "secondary small"); done.type = "button";
+  done.addEventListener("click", () => { box.hidden = true; box.textContent = ""; });
+  line.append(code, copy, done); box.appendChild(line);
+  box.appendChild(txt("div", "Try it:", "lead"));
+  box.appendChild(txt("pre", `curl -H "X-API-Key: ${r.data.key}" ${apiBase()}/partner/v1/events`, "snip"));
+  loadKeys();
+}
+
+$("keyForm").addEventListener("submit", createKey);
+
+// ------------------------------------------------------------- EventPulse AI model (Nugen)
+async function loadNugenConnection() {
+  const box = $("nconn");
+  let v;
+  try { v = await fetch(`${API}/ai/nugen/verify`).then((r) => r.json()); } catch (e) { box.textContent = "Couldn't reach the API."; return; }
+  box.textContent = "";
+  const row = (cls, mark, text, note) => {
+    const d = document.createElement("div"); d.className = `row ${cls}`;
+    d.appendChild(txt("b", mark));
+    const s = document.createElement("span"); s.appendChild(document.createTextNode(text));
+    if (note) { s.appendChild(document.createElement("br")); s.appendChild(txt("small", note)); }
+    d.appendChild(s); box.appendChild(d);
+  };
+  if (!v.has_key) { row("bad", "\u2717", "No Nugen API key on this server."); return; }
+  if (v.accepted === true) {
+    row("ok", "\u2713", `Nugen API key accepted (${v.key})`, `Confirmed live with Nugen at ${new Date(v.checked_at * 1000).toLocaleTimeString()}; `
+      + `${v.alignment_ready_models.length} base models available to align: ${v.alignment_ready_models.join(", ")}.`);
+  } else {
+    const last = v.last_verified ? ` Last confirmed ${new Date(v.last_verified.at * 1000).toLocaleString()}.` : "";
+    row("wait", "\u2026", "Couldn't confirm the key with Nugen just now." + last, v.reason || "");
+  }
+  (v.documents || []).forEach((d) => row(d.status === "READY" ? "ok" : "wait", d.status === "READY" ? "\u2713" : "\u2026", `Training document on Nugen: ${d.name}`, d.status));
+  if (v.benchmark) row(v.benchmark.status === "READY" ? "ok" : "wait", v.benchmark.status === "READY" ? "\u2713" : "\u2026",
+    `Benchmark on Nugen: ${v.benchmark.name}`, `${v.benchmark.status}, ${v.benchmark.samples} questions`);
+  if (v.model) {
+    const ds = v.model.deployment_status;
+    row(ds === "DEPLOYED" ? "ok" : "wait", ds === "DEPLOYED" ? "\u2713" : "\u2026", `Domain model ${v.model.id}: ${ds}`,
+      ds === "DEPLOYED" ? "Serving the copilot, operator plans and attendee guidance." : "Nugen stops it after evaluations; EventPulse redeploys it automatically.");
+  }
+  if (v.alignment && v.alignment.trained && v.alignment.model_id) {
+    const a = v.alignment;
+    row("ok", "\u2713", `Alignment on ${a.base_model_id}: training completed`,
+      `${a.id} produced ${a.model_id}.` + (a.status === "FAILED" ? " Nugen's own evaluation run afterwards failed on their side (their batch inference returned 502), so no benchmark scores yet." : ""));
+  } else if (v.alignment) {
+    const a = v.alignment, failed = a.status === "FAILED";
+    row(failed ? "bad" : (a.status === "READY" ? "ok" : "wait"), failed ? "\u2717" : (a.status === "READY" ? "\u2713" : "\u2026"),
+      `Alignment on ${a.base_model_id}: ${a.status}`,
+      failed ? `Nugen couldn't start the training job (${a.error}). ${a.attempts} attempts so far; waiting on Nugen to fix it for this account.` : a.id);
+  }
+}
+
+async function loadModelCard() {
+  loadNugenConnection();
+  let n;
+  try { n = await fetch(`${API}/ai/nugen`).then((r) => r.json()); } catch (e) { return; }
+  const pipe = $("pipe"); pipe.textContent = "";
+  const st = n.stages || {};
+  const step = (title, done, lines) => {
+    const d = document.createElement("div"); d.className = done ? "done" : "wait";
+    d.appendChild(txt("b", `${done ? "\u2713 " : ""}${title}`));
+    lines.filter(Boolean).forEach((l) => { d.appendChild(txt("small", l)); d.appendChild(document.createElement("br")); });
+    pipe.appendChild(d);
+  };
+  const c = n.corpus || (st.corpus || {});
+  step("1. Base model", !!n.base_model_id, [n.base_model_name || n.base_model_id || "chosen when alignment starts"]);
+  step("2. Nugen alignment", !!st.alignment_done, [c.cases ? `${c.cases} worked cases + handbook` : "corpus not built yet",
+    n.benchmark_questions ? `${n.benchmark_questions}-question benchmark` : "", n.alignment_id || "", n.alignment_status || ""]);
+  step("3. Domain model", !!n.model_id, [n.model_id || "not created yet", n.deployment_status || ""]);
+  step("4. In EventPulse", !!n.configured, [n.configured ? "serving plans, guidance, copilot" : (n.has_key ? "waiting for the model" : "NUGEN_API_KEY not set on this server")]);
+  const m = n.performance_metrics;
+  $("modelInfo").textContent = m && m.accuracy_before != null
+    ? `Benchmark accuracy before alignment ${m.accuracy_before}%, after ${m.accuracy_after}%` + (m.domain_violations_before != null ? `; domain violations ${m.domain_violations_before} \u2192 ${m.domain_violations_after}.` : ".")
+    : (n.model_id ? "Evaluation scores will appear here once Nugen has scored the model." : "Run `python nugen_align.py run` in backend/ with NUGEN_API_KEY set to align and deploy the model.");
+  try {
+    const p = await fetch(`${API}/ai/plan`).then((r) => r.json());
+    const box = $("livePlan"); box.textContent = "";
+    const h = document.createElement("div"); h.style.marginTop = "12px";
+    h.appendChild(txt("b", "Operator plan right now"));
+    h.appendChild(txt("span", p.source === "nugen" ? `EventPulse model on Nugen${p.confidence != null ? ` \u00B7 ${Math.round(p.confidence)}% confident` : ""}` : "Playbook", `src ${p.source}`));
+    box.appendChild(h);
+    const ol = document.createElement("ol"); p.actions.forEach((a) => ol.appendChild(txt("li", a))); box.appendChild(ol);
+  } catch (e) { /* the card still shows the pipeline */ }
+}
+
+// ------------------------------------------------------------- field reports (weather twin)
+const frMsg = (t, kind) => { const m = $("frMsg"); m.textContent = t || ""; m.className = kind || ""; };
+
+async function loadFieldReports() {
+  try {
+    const clock = await fetch(`${API}/clock`).then((r) => r.json());
+    const [zones, links] = await Promise.all([
+      fetch(`${API}/zones?hour=${clock.hour}`).then((r) => r.json()),
+      fetch(`${API}/transport?hour=${clock.hour}`).then((r) => r.json()),
+    ]);
+    const names = Object.fromEntries(zones.map((z) => [z.id, z.name]));
+    const zs = $("frZone"); zs.textContent = "";
+    zones.forEach((z) => { const o = document.createElement("option"); o.value = z.id; o.textContent = z.name; zs.appendChild(o); });
+    const ls = $("frLink"); ls.textContent = "";
+    links.forEach((l) => { const o = document.createElement("option"); o.value = l.link_id;
+      o.textContent = `${l.mode} ${names[l.from_zone]} - ${names[l.to_zone]} (now ${Math.round(l.load_pct)}%)`; ls.appendChild(o); });
+  } catch (e) { frMsg("Could not load zones and links.", "err"); }
+  showModel();
+}
+
+async function showModel() {
+  try {
+    const m = await fetch(`${API}/weather-twin/model`).then((r) => r.json());
+    const t = m.learned.transport;
+    $("frModel").textContent = `Learned so far: rain multiplies transport demand by ${t.mean.toFixed(2)} (90% range ${t.low.toFixed(2)}-${t.high.toFixed(2)}), `
+      + `from ${t.rows.toLocaleString()} hours of history and ${t.live_updates} field load report${t.live_updates === 1 ? "" : "s"}; `
+      + `${m.flood_reports} flood report${m.flood_reports === 1 ? "" : "s"} on file.`;
+  } catch (e) { /* the card still works */ }
+}
+
+async function sendFlood(flooded) {
+  const zone = $("frZone").value;
+  const r = await api("/organizer/weather/observe", "POST", { kind: "flood", zone_id: zone, flooded });
+  if (r.ended) return;
+  if (!r.ok) { frMsg((r.data && r.data.detail) || "Could not send the report.", "err"); return; }
+  const name = $("frZone").selectedOptions[0].textContent;
+  frMsg(flooded ? `Reported ${name} as flooded. Its flood estimate is up in the twin now.` : `Reported ${name} as clear.`, "ok");
+  showModel();
+}
+
+async function sendLoad() {
+  const v = Number($("frLoad").value);
+  if (!(v > 0 && v <= 400)) { frMsg("Enter the measured load as a percentage of capacity (1-400).", "err"); return; }
+  const r = await api("/organizer/weather/observe", "POST", { kind: "transport", link_id: $("frLink").value, load_pct: v });
+  if (r.ended) return;
+  if (!r.ok) { frMsg((r.data && r.data.detail) || "Could not send the report.", "err"); return; }
+  const c = r.data.transport_load_multiplier;
+  frMsg(`Learned from it (rain here ${r.data.rain_mm_h.toFixed(1)} mm/h): rain's effect on demand moved from ${c.before.mean.toFixed(3)} to ${c.after.mean.toFixed(3)}.`, "ok");
+  $("frLoad").value = "";
+  showModel();
+}
+
+$("frFlooded").addEventListener("click", () => sendFlood(true));
+$("frClear").addEventListener("click", () => sendFlood(false));
+$("frSendLoad").addEventListener("click", sendLoad);
+
+// ------------------------------------------------------------- what-if simulator
+let scen = "cancel";
+let simMeta = null;
+
+const nfmt = (n) => Number(n).toLocaleString();
+
+async function loadSimMeta() {
+  if (simMeta) return;
+  const hour = $("hourInput").value || 106;
+  try {
+    const [events, zones, transport] = await Promise.all([
+      fetch(`${API}/events?hour=${hour}`).then((r) => r.json()),
+      fetch(`${API}/zones?hour=${hour}`).then((r) => r.json()),
+      fetch(`${API}/transport?hour=${hour}`).then((r) => r.json()),
+    ]);
+    simMeta = { events: events.all || [], zones, transport };
+  } catch (e) {
+    $("simMsg").className = "err";
+    $("simMsg").textContent = "Could not load events and zones. Is the API running?";
+    return;
+  }
+
+  const nameOf = {};
+  simMeta.zones.forEach((z) => { nameOf[z.id] = z.name; });
+  const fill = (id, items) => {
+    const sel = $(id);
+    sel.textContent = "";
+    items.forEach(([value, label]) => {
+      const o = document.createElement("option");
+      o.value = value; o.textContent = label; sel.appendChild(o);
+    });
+  };
+  fill("simEvent", simMeta.events.map((e) => [e.event_id, `${e.name} \u2014 ${e.zone_name}`]));
+  fill("simLink", simMeta.transport.map((l) => [l.link_id, `${nameOf[l.from_zone] || l.from_zone} \u2194 ${nameOf[l.to_zone] || l.to_zone} (${l.mode})`]));
+  fill("simZone", simMeta.zones.map((z) => [z.id, z.name]));
+  // Default to the biggest event, which is the one worth stress-testing.
+  const big = simMeta.events.slice().sort((a, b) => b.expected_attendance - a.expected_attendance)[0];
+  if (big) $("simEvent").value = big.event_id;
+}
+
+function setScenario(k) {
+  scen = k;
+  document.querySelectorAll("[data-scen]").forEach((b) => b.setAttribute("aria-pressed", String(b.getAttribute("data-scen") === k)));
+  $("pEvent").classList.toggle("hidden", !(k === "cancel" || k === "surge"));
+  $("pSurge").classList.toggle("hidden", k !== "surge");
+  $("pLink").classList.toggle("hidden", k !== "link");
+  $("pMove").classList.toggle("hidden", k !== "move");
+  $("simResult").classList.add("hidden");
+  $("simMsg").textContent = "";
+}
+
+function sevClass(s) { return s === "critical" ? "critical" : s === "warning" ? "warning" : "ok"; }
+function txt(tag, text, cls) { const e = document.createElement(tag); if (cls) e.className = cls; e.textContent = text; return e; }
+
+// One row of a before -> after table. `sev` colours the value by severity.
+function cmpTable(rows) {
+  const t = document.createElement("div");
+  t.className = "cmp";
+  t.appendChild(txt("div", "", "h")); t.appendChild(txt("div", "Before", "h")); t.appendChild(txt("div", "", "h")); t.appendChild(txt("div", "After", "h"));
+  rows.forEach(([label, before, after, sevB, sevA]) => {
+    t.appendChild(txt("div", label, "k"));
+    t.appendChild(txt("div", before, "v " + (sevB || "")));
+    t.appendChild(txt("div", "\u2192", "arrow"));
+    t.appendChild(txt("div", after, "v " + (sevA || "")));
+  });
+  return t;
+}
+
+function showResult(title, verdict, nodes) {
+  const box = $("simResult");
+  box.textContent = "";
+  box.appendChild(txt("h3", title));
+  box.appendChild(txt("div", verdict, "verdict"));
+  nodes.forEach((n) => box.appendChild(n));
+  box.classList.remove("hidden");
+}
+
+const hrs = (h) => (h == null ? "n/a" : `${h}h`);
+const VERDICT = { clear: "Clear", reroute: "Detour available", no_relief: "Saturated, no detour helps" };
+const verdictLabel = (v) => VERDICT[v] || v;
+
+function renderCancel(d) {
+  const b = d.before.egress, a = d.after.egress;
+  const better = a.hours_to_clear_zone != null && b.hours_to_clear_zone != null && a.hours_to_clear_zone < b.hours_to_clear_zone;
+  showResult(`Cancel ${d.event_name}`,
+    `${nfmt(d.already_admitted)} people are already inside at this hour and would have to be evacuated; nobody still outside gets in.` +
+      (better ? " That is a smaller, faster exit than the planned end of the event." : ""),
+    [cmpTable([
+      ["People to evacuate", nfmt(b.leaving), nfmt(a.leaving)],
+      ["Time to clear the zone", hrs(b.hours_to_clear_zone), hrs(a.hours_to_clear_zone), sevClass(b.severity), sevClass(a.severity)],
+      ["Egress severity", b.severity, a.severity, sevClass(b.severity), sevClass(a.severity)],
+      ["Active alerts", String(d.alerts_before), String(d.alerts_after)],
+    ])]);
+}
+
+function renderSurge(d) {
+  const b = d.before, a = d.after;
+  showResult(`+${nfmt(d.extra_people)} visitors at ${d.event_name}`,
+    `Expected attendance goes from ${nfmt(b.expected_attendance)} to ${nfmt(a.expected_attendance)}.` +
+      (a.turned_away > b.turned_away ? ` ${nfmt(a.turned_away - b.turned_away)} more people would be turned away at the gates.` : ""),
+    [cmpTable([
+      ["Expected attendance", nfmt(b.expected_attendance), nfmt(a.expected_attendance)],
+      ["Turned away", nfmt(b.turned_away), nfmt(a.turned_away), b.turned_away ? "warning" : "ok", a.turned_away ? "critical" : "ok"],
+      ["Peak gate queue", nfmt(b.peak_queue), nfmt(a.peak_queue)],
+      ["Ingress severity", b.ingress_severity, a.ingress_severity, sevClass(b.ingress_severity), sevClass(a.ingress_severity)],
+      ["Active alerts", String(d.alerts_before), String(d.alerts_after)],
+    ])]);
+}
+
+function renderLink(d) {
+  const nameOf = {};
+  simMeta.zones.forEach((z) => { nameOf[z.id] = z.name; });
+  const b = d.before.route, a = d.after.route;
+  const rows = [["Route status", verdictLabel(b.verdict), verdictLabel(a.verdict), b.verdict === "no_relief" ? "critical" : "ok", a.verdict === "no_relief" ? "critical" : "ok"]];
+  const be = d.before.venue_egress, ae = d.after.venue_egress;
+  Object.keys(ae).forEach((z) => {
+    if (be[z] && ae[z]) rows.push([`${nameOf[z] || z} egress`, hrs(be[z].hours_to_clear_zone), hrs(ae[z].hours_to_clear_zone), sevClass(be[z].severity), sevClass(ae[z].severity)]);
+  });
+  const extra = [cmpTable(rows)];
+  const routes = document.createElement("div");
+  routes.style.marginTop = "12px";
+  routes.appendChild(txt("div", `Before: ${b.summary || "no route information"}`, "sub"));
+  routes.appendChild(txt("div", `After: ${a.summary || "no route information"}`, "sub"));
+  extra.push(routes);
+  showResult(`Close ${nameOf[d.from_zone] || d.from_zone} \u2194 ${nameOf[d.to_zone] || d.to_zone}`,
+    a.verdict === "no_relief" ? "With this link gone there is no good way through: stagger departures or add capacity."
+      : "There is still a way through, though it may be slower.", extra);
+}
+
+function renderMove(d) {
+  const s = d.source;
+  const nodes = [cmpTable([
+    [`${d.zone_name} occupancy`, `${s.occupancy_before_pct}%`, `${s.occupancy_after_pct}%`, sevClass(s.status_before), sevClass(s.status_after)],
+    ["Status", s.status_before, s.status_after, sevClass(s.status_before), sevClass(s.status_after)],
+  ])];
+  (d.placements || []).forEach((p) => {
+    const row = document.createElement("div");
+    row.className = "place";
+    row.appendChild(txt("span", `${p.zone_name}  +${nfmt(p.received)}`));
+    row.appendChild(txt("span", `${p.occupancy_before_pct}% \u2192 ${p.occupancy_after_pct}%`, "k"));
+    nodes.push(row);
+  });
+  showResult(`Redirect ${nfmt(d.requested_move)} visitors from ${d.zone_name}`,
+    `${nfmt(d.relocated)} actually move, ${nfmt(d.stayed_put)} ignore the guidance` +
+      (d.unplaceable ? `, and ${nfmt(d.unplaceable)} have nowhere to go.` : ".") +
+      (d.alert_clears ? " The alert clears." : ""), nodes);
+}
+
+async function runSim() {
+  const msg = $("simMsg");
+  msg.className = ""; msg.textContent = "";
+  const hour = Number($("hourInput").value) || 106;
+  let url, render;
+
+  if (scen === "cancel") { url = `/scenarios/cancel/${$("simEvent").value}?hour=${hour}`; render = renderCancel; }
+  else if (scen === "surge") {
+    const extra = Number($("simExtra").value);
+    if (!(extra > 0)) { msg.className = "err"; msg.textContent = "Enter a number of extra visitors."; return; }
+    url = `/scenarios/surge/${$("simEvent").value}?extra=${Math.round(extra)}&hour=${hour}`; render = renderSurge;
+  } else if (scen === "link") { url = `/scenarios/close-link/${$("simLink").value}?hour=${hour}`; render = renderLink; }
+  else { url = `/simulate/${$("simZone").value}?move=${$("simMove").value}&hour=${hour}&compliance=${$("simComp").value}`; render = renderMove; }
+
+  if (!simMeta) { msg.className = "err"; msg.textContent = "Events and zones haven't loaded yet."; return; }
+  $("simRun").disabled = true;
+  msg.textContent = "Running...";
+  try {
+    const res = await fetch(API + url);
+    const data = await res.json();
+    if (!res.ok) { msg.className = "err"; msg.textContent = data.detail || "The simulation failed."; }
+    else { msg.textContent = ""; render(data); }
+  } catch (e) {
+    msg.className = "err"; msg.textContent = "Could not reach the API.";
+  }
+  $("simRun").disabled = false;
+}
+
+document.querySelectorAll("[data-scen]").forEach((b) => b.addEventListener("click", () => setScenario(b.getAttribute("data-scen"))));
+$("simMove").addEventListener("input", () => { $("simMoveN").textContent = nfmt($("simMove").value); });
+$("simRun").addEventListener("click", runSim);
+
+// Resume a session already signed in this tab, if the token is still valid.
+if (TOKEN) {
+  const who = orgStore("eventpulse_organizer_who") || undefined;
+  showApp(who);
+}
+</script>
+
+</body>
+</html>

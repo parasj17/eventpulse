@@ -1,0 +1,2770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EventPulse — City Digital Twin</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<link rel="stylesheet" href="vendor/maplibre-gl.css" />
+<style>
+  :root {
+    --bg:        #0A0A0A;
+    --panel:     #101010;
+    --panel-hi:  #171717;
+    --line:      #242424;
+    --ink:       #F2F2F2;
+    --ink-dim:   #8C8C8C;
+    --ink-faint: #5A5A5A;
+    --accent:    #FF3B1F;
+    --good:      #00C46A;
+    --warn:      #D9A441;
+    --cyan:      #7FD4FF;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .back { color: var(--ink-dim); font-size: 13px; text-decoration: none; }
+  .back:hover { color: var(--ink); }
+  .brand { font-weight: 700; letter-spacing: .3px; }
+  .brand span { color: var(--accent); }
+  .brand small { color: var(--ink-faint); font-weight: 500; margin-left: 8px; }
+  .kpis { display: flex; gap: 22px; margin-left: auto; flex-wrap: wrap; }
+  .kpi .n { font-size: 20px; font-weight: 700; line-height: 1.1; }
+  .kpi .l { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .6px; }
+  .n.good { color: var(--good); } .n.warn { color: var(--warn); } .n.crit { color: var(--accent); }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--bg);
+  }
+  .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .group + .group { padding-left: 14px; border-left: 1px solid var(--line); }
+  @media (max-width: 900px) {
+    .group + .group { padding-left: 0; border-left: none; }
+    .toolbar { gap: 10px; padding: 10px 14px; }
+    header { padding: 12px 14px; }
+  }
+  button {
+    font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-dim);
+    background: var(--panel-hi); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 11px; cursor: pointer;
+  }
+  button:hover { color: var(--ink); }
+  button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink-faint); background: #222; }
+  button:focus-visible, canvas:focus-visible { outline: 2px solid var(--ink-dim); outline-offset: 1px; }
+  #play { min-width: 64px; }
+  input[type=range] { width: 220px; accent-color: var(--accent); }
+  #hourLabel { font-size: 13px; font-weight: 600; min-width: 108px; }
+  .lbl { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .6px; }
+
+  .main { flex: 1; display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  #stage { position: relative; min-height: 520px; overflow: hidden; background:
+      radial-gradient(ellipse at 50% 45%, #14181a 0%, var(--bg) 70%); }
+  #cv { position: absolute; left: 0; top: 0; display: none; cursor: grab; touch-action: none; }
+  #cv.grabbing { cursor: grabbing; }
+  /* The real map is the default. The canvas model only appears if the map
+     cannot load (no WebGL, tiles unreachable), so the page still works offline. */
+  #map { position: absolute; inset: 0; }
+  body.canvas-mode #cv { display: block; }
+  body.canvas-mode #map { display: none; }
+  .maplibregl-ctrl-attrib { font-size: 10px; }
+  .maplibregl-ctrl-group { background: var(--panel-hi) !important; border: 1px solid var(--line); }
+  .maplibregl-ctrl-group button { filter: invert(1) hue-rotate(180deg); }
+
+  /* Embedded in the dashboard: no chrome of its own, the dashboard drives the clock. */
+  body.embed { min-height: 0; height: 100vh; }
+  body.embed header, body.embed aside, body.embed #timeGroup, body.embed #hint { display: none; }
+  body.embed .main { grid-template-columns: 1fr; }
+  body.embed #stage { min-height: 0; height: 100%; }
+  body.embed .toolbar { padding: 8px 12px; gap: 8px; }
+  body.embed #legend { padding: 6px 10px; } body.embed #legend .note { display: none; }
+  /* ---------- weather twin ---------- */
+  .wx .now { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .wx .now .t { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+  .wx .now .c { font-weight: 700; }
+  .wx .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 4px; }
+  .wx .facts div { background: var(--panel-hi); border-radius: 8px; padding: 7px 9px; }
+  .wx .facts b { display: block; font-size: 14px; } .wx .facts span { color: var(--ink-faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; }
+  .wx .src { color: var(--ink-faint); font-size: 11px; margin-top: 6px; }
+  .wx h4 { margin: 18px 0 8px; font-size: 13px; letter-spacing: .02em; }
+  .wx .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .wx .chips span { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 3px 8px; background: var(--panel-hi); color: var(--ink-dim); }
+  .wx .chips span.hot { background: rgba(77,163,255,.16); color: #8fc4ff; }
+  .wx .post { border-left: 2px solid #3a3a3a; padding: 4px 0 4px 10px; margin: 8px 0; font-size: 12.5px; line-height: 1.4; }
+  .wx .post small { display: block; color: var(--ink-faint); font-size: 11px; margin-top: 3px; }
+
+  .wx .post.flooding { border-left-color: #4DA3FF; } .wx .post.transport { border-left-color: var(--warn); } .wx .post.alert { border-left-color: var(--accent); }
+  .wx .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .wx .presets button { padding: 5px 9px; font-size: 12px; }
+  .wx .slider { margin: 9px 0; }
+  .wx .slider .top { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-dim); }
+  .wx .slider .top b { color: var(--ink); }
+  .wx .slider input { width: 100%; accent-color: #4DA3FF; margin: 4px 0 0; }
+  .wx .seg2 { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; align-items: center; }
+  .wx .seg2 button { padding: 5px 9px; font-size: 12px; }
+  .wx select { font: inherit; font-size: 12px; background: var(--panel-hi); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; }
+  .wx .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+  .wx .kpis div { background: var(--panel-hi); border-radius: 8px; padding: 8px 10px; }
+  .wx .kpis b { display: block; font-size: 17px; } .wx .kpis small { color: var(--ink-faint); font-size: 11px; }
+  .wx .range { position: relative; height: 5px; background: #242424; border-radius: 3px; margin-top: 6px; }
+  .wx .range i { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: rgba(77,163,255,.45); }
+  .wx .range em { position: absolute; top: -2px; width: 2px; height: 9px; background: #fff; }
+  .wx .fx { margin: 6px 0; padding: 7px 9px 7px 11px; border-radius: 8px; background: var(--panel-hi); font-size: 12.5px; line-height: 1.4; border-left: 3px solid; }
+  .wx .fx.o1 { border-left-color: #4DA3FF; } .wx .fx.o2 { border-left-color: var(--warn); } .wx .fx.o3 { border-left-color: var(--accent); }
+  .wx .fx.click { cursor: pointer; } .wx .fx.click:hover { background: #1f1f1f; }
+  .wx .fx.summary { background: none; color: var(--ink-faint); border-left-color: transparent; padding-top: 0; }
+  .wx .ord { font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .6px; margin: 12px 0 4px; }
+  .wx details { margin-top: 12px; font-size: 12px; color: var(--ink-dim); }
+  .wx details summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+  .wx details li { margin: 4px 0; }
+  .wx .note { color: var(--ink-faint); font-size: 11.5px; line-height: 1.45; margin-top: 8px; }
+  .wx .placing { outline: 2px solid #4DA3FF; }
+  .wxkey { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 6px; color: var(--ink-dim); }
+  .wxkey i { display: inline-block; width: 12px; height: 8px; margin-right: 4px; vertical-align: 0; border-radius: 2px; }
+  .wxkey i.r { background: rgba(63,140,255,.6); border-radius: 50%; width: 9px; height: 9px; } .wxkey i.f { background: #3565e0; opacity: .7; }
+  .wxkey i.l { background: repeating-linear-gradient(90deg, #d6283b 0 4px, transparent 4px 6px); } .wxkey i.c { background: repeating-linear-gradient(90deg, #E8A33D 0 2px, transparent 2px 5px); }
+  .wx .plan { margin: 12px 0; border: 1px solid #2c4f78; background: rgba(77,163,255,.06); border-radius: 10px; padding: 10px 12px; }
+  .wx .plan .phead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  .wx .plan .src { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 2px 7px; background: #222; color: var(--ink-dim); }
+  .wx .plan .src.nugen { background: rgba(155,107,255,.18); color: #c9b3ff; }
+  .wx .plan ol { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
+  .wx .plan li { margin: 4px 0; }
+  .wx .plan .amsg { margin-top: 8px; font-size: 12.5px; color: var(--ink-dim); font-style: italic; }
+  #wxBanner[hidden], #wxHint[hidden] { display: none !important; }
+  #wxBanner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; gap: 10px; align-items: center;
+    background: rgba(20,40,70,.94); border: 1px solid #3c6ea8; color: #dcecff; border-radius: 999px; padding: 6px 8px 6px 14px;
+    font-size: 12.5px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.4); white-space: nowrap; }
+  #wxBanner button { padding: 4px 10px; font-size: 12px; }
+  #wxHint { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 6; background: rgba(10,10,10,.9); border: 1px solid #3c6ea8;
+    color: #dcecff; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; }
+  body.embed #wxBanner { top: 8px; font-size: 11.5px; }
+  #tip {
+    position: absolute; pointer-events: none; display: none; z-index: 3;
+    background: rgba(16,16,16,.95); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; white-space: nowrap;
+  }
+  #legend {
+    position: absolute; left: 16px; bottom: 14px; z-index: 2; font-size: 11px; color: var(--ink-dim);
+    background: rgba(16,16,16,.85); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px;
+  }
+  #legend .bar {
+    width: 190px; height: 8px; border-radius: 4px; margin: 5px 0 4px;
+    background: linear-gradient(90deg, rgb(8,70,66) 0%, rgb(0,196,106) 35%, rgb(217,164,65) 62%, rgb(255,120,40) 85%, rgb(255,59,31) 100%);
+  }
+  #legend .ticks { display: flex; justify-content: space-between; color: var(--ink-faint); }
+  #legend .note { margin-top: 5px; color: var(--ink-faint); max-width: 190px; line-height: 1.35; }
+  #hint {
+    position: absolute; right: 14px; bottom: 34px; z-index: 2; font-size: 11px; color: var(--ink-faint);
+    text-align: right; line-height: 1.5; background: rgba(10,10,10,.6); padding: 4px 8px; border-radius: 6px;
+  }
+  #renderNote { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; display: none;
+    background: rgba(217,164,65,.14); border: 1px solid var(--warn); color: var(--ink); padding: 6px 14px;
+    border-radius: 8px; font-size: 12.5px; max-width: min(560px, calc(100% - 40px)); text-align: center; }
+  #banner {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 4; display: none;
+    background: rgba(255,59,31,.14); border: 1px solid var(--accent); color: var(--ink);
+    padding: 6px 14px; border-radius: 8px; font-size: 12.5px;
+  }
+
+  aside { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; max-height: calc(100vh - 106px); }
+  .sect { padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .sect h3 { margin: 0 0 3px; font-size: 15px; }
+  .sub { color: var(--ink-dim); font-size: 12.5px; }
+  .eyebrow { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px; }
+  .bar { position: relative; height: 8px; border-radius: 4px; background: var(--panel-hi); overflow: hidden; }
+  .bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .barrow { margin: 10px 0; }
+  .barrow .top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: var(--ink-dim); }
+  .barrow .top b { color: var(--ink); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 12px; }
+  .stat .k { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .5px; }
+  .stat .v { font-size: 15px; font-weight: 700; margin-top: 2px; }
+  .chip { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 3px 8px; margin-top: 8px; }
+  .chip.live { background: rgba(255,59,31,.16); color: var(--accent); }
+  .chip.soon { background: rgba(217,164,65,.16); color: var(--warn); }
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; background: var(--panel-hi); margin-bottom: 6px; font-size: 13px;
+  }
+  .row .nm { font-weight: 600; }
+  .row .nt { color: var(--ink-faint); font-size: 11.5px; margin-top: 2px; }
+  .row.click { cursor: pointer; } .row.click:hover { background: #1e1e1e; }
+  .badge { border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap; }
+  .badge.open { background: var(--good); } .badge.restricted { background: var(--warn); } .badge.closed { background: var(--accent); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+  .dot.critical { background: var(--accent); } .dot.warning { background: var(--warn); } .dot.ok { background: var(--good); }
+  .empty { color: var(--ink-dim); font-size: 13px; line-height: 1.5; }
+  .crowdkey { display: flex; align-items: center; gap: 7px; margin-top: 7px; font-size: 11px; color: var(--ink-dim); }
+  .crowdkey i { width: 40px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, rgba(77,163,255,.2), rgba(140,120,255,.7), #fff); }
+  .hs .nm { display: flex; align-items: center; gap: 8px; }
+  .hs .cnt { font-weight: 700; color: #8fc4ff; white-space: nowrap; }
+  .near .youdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #4DA3FF; margin-right: 8px; box-shadow: 0 0 0 3px rgba(77,163,255,.25); }
+  .near h3 { display: flex; align-items: center; }
+  .lvl { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; margin-left: 8px; }
+  .lvl.calm { background: rgba(0,196,106,.16); color: var(--good); } .lvl.filling { background: rgba(217,164,65,.16); color: var(--warn); }
+  .lvl.crowded, .lvl.full { background: rgba(255,59,31,.16); color: var(--accent); }
+  .near .cta { margin-top: 10px; }
+  .stay .nt { line-height: 1.35; } .stay .price { font-size: 12px; color: var(--ink-dim); white-space: nowrap; text-align: right; }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    aside { border-left: none; border-top: 1px solid var(--line); max-height: none; }
+    #stage { min-height: 440px; }
+    #legend .note { display: none; }
+    #legend { left: 10px; bottom: 10px; padding: 6px 10px; }
+    #hint { display: none; }
+    .kpis { margin-left: 0; }
+    input[type=range] { width: 150px; }
+  }
+  .brand { display: inline-flex; align-items: center; gap: 9px; }
+  .brand .wm { font-weight: inherit; white-space: nowrap; }
+  .logo-mark { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 3px 10px rgba(255,59,31,.35)); }
+  .brand-sub { color: var(--ink-faint, #6A6A6A); font-weight: 500; font-size: 13px; margin-left: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="back" href="index.html">&larr; Dashboard</a>
+  <div class="brand"><img class="logo-mark" src="logo.svg" alt="" /><b class="wm">Event<span>Pulse</span></b><small>City Digital Twin</small></div>
+  <div class="kpis" id="kpis"></div>
+</header>
+
+<div class="toolbar">
+  <div class="group" id="timeGroup">
+    <button id="play" aria-label="Play or pause the clock">Play</button>
+    <input id="hour" type="range" min="24" max="144" step="1" value="110" aria-label="Simulated hour" />
+    <span id="hourLabel"></span>
+  </div>
+  <div class="group">
+    <span class="lbl">View</span>
+    <button id="modeNow" aria-pressed="true">Now</button>
+    <button id="modeFc" aria-pressed="false">+6h forecast</button>
+  </div>
+  <div class="group" id="layers">
+    <span class="lbl">Layers</span>
+    <button data-layer="heat" aria-pressed="true">Heatmap</button>
+    <button data-layer="towers" aria-pressed="true">Towers</button>
+    <button data-layer="links" aria-pressed="true">Transport</button>
+    <button data-layer="flow" aria-pressed="true">Flow</button>
+    <button data-layer="labels" aria-pressed="true">Labels</button>
+    <button data-layer="crowd" aria-pressed="true" id="crowdBtn" hidden>Crowd</button>
+    <button data-layer="weather" aria-pressed="true" id="wxBtn" hidden>Weather</button>
+    <button data-layer="orbit" aria-pressed="false">Orbit</button>
+  </div>
+  <div class="group" id="demoGroup" hidden>
+    <span class="lbl">Demo crowd</span>
+    <button id="demoMetro" title="Add a synthetic crowd of attendees around the metro interchange">At metro</button>
+    <button id="demoStadium" title="Add a synthetic crowd around the stadium">At stadium</button>
+    <button id="demoClear">Clear</button>
+  </div>
+  <div class="group">
+    <button id="locateMe" aria-label="Show where I am">Locate me</button>
+    <button id="zoomOut" aria-label="Zoom out">&minus;</button>
+    <button id="zoomIn" aria-label="Zoom in">+</button>
+    <button id="reset">Reset view</button>
+  </div>
+</div>
+
+<div class="main">
+  <div id="stage">
+    <div id="map" role="application" aria-label="3D map of the city. Drag to pan, right-drag or Ctrl-drag to rotate and tilt, scroll to zoom, click a tower to inspect a zone."></div>
+    <canvas id="cv" tabindex="0" aria-label="3D digital twin of the city. Drag to rotate, scroll to zoom, click a tower to inspect a zone."></canvas>
+    <div id="tip"></div>
+    <div id="banner"></div>
+    <div id="renderNote"></div>
+    <div id="legend">
+      <div class="lbl">Pressure heatmap</div>
+      <div class="bar"></div>
+      <div class="ticks"><span>Headroom</span><span>Filling</span><span>At capacity</span></div>
+      <div class="crowdkey" id="crowdKey" hidden><i></i>Live attendee crowd</div>
+      <div class="wxkey" id="wxKey" hidden><span><i class="r"></i>Rain</span><span><i class="f"></i>Flood risk</span><span><i class="l"></i>Link cut</span><span><i class="c"></i>Knock-on</span></div>
+      <div class="note">Tower height is occupancy; the pale extension is where the forecast takes it in 6 hours. Arcs are transport links, coloured by load.</div>
+    </div>
+    <div id="wxBanner" hidden role="status"><span id="wxBannerText">What-if simulation &middot; the live system is not changed</span>
+      <button type="button" id="wxBackLive">Back to live</button></div>
+    <div id="wxHint" hidden>Click the map to put the storm there</div>
+    <div id="hint">Drag to pan &middot; right-drag to tilt &amp; rotate &middot; scroll to zoom<br />Click a tower to inspect</div>
+  </div>
+
+  <aside>
+    <div class="sect wx" id="weather" hidden></div>
+    <div class="sect near" id="nearYou"></div>
+    <div class="sect" id="hotspots" hidden></div>
+    <div class="sect" id="detail"></div>
+    <div class="sect">
+      <div class="eyebrow">Live alerts</div>
+      <div id="alerts"></div>
+    </div>
+  </aside>
+</div>
+
+<script src="vendor/maplibre-gl.js"></script>
+<script src="locate.js"></script>
+<script src="presence.js"></script>
+<script>
+"use strict";
+
+// ---------------------------------------------------------------------------
+// Data access. Same split the dashboard uses: a live API when running locally,
+// the precomputed hourly bundle everywhere else (there is no backend on a
+// static deploy).
+// ---------------------------------------------------------------------------
+// This machine, or the live API reached over the local network (a phone on the same Wi-Fi).
+const LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost"
+  || /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname)
+  || location.hostname.endsWith(".vercel.app") || document.querySelector('meta[name="ep-live-api"]') !== null;
+const API = location.port === "8080" ? "http://127.0.0.1:8000" : "";
+const STATIC = !LOCAL;
+const FIRST_HOUR = 24;
+const LAST_HOUR = 144;
+const FORECAST_AHEAD = 6;
+
+const cache = new Map();
+
+const params0 = new URLSearchParams(location.search);
+const EMBED = params0.get("embed") === "1" && window.parent !== window;
+if (EMBED) document.body.classList.add("embed");
+
+// The active renderer plugs in here. Data, panels and selection live outside it
+// so the real map and the offline canvas model behave identically.
+const R = {
+  onData() {}, onSelect() {}, onExtras() {}, onLayers() {}, onMode() {}, onYou() {}, onCrowd() {}, onWeather() {},
+  zoomBy() {}, reset() {}, flyTo() {},
+};
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  return res.json();
+}
+
+function normalise(hour, raw) {
+  const forecast = new Map();
+  (raw.forecast || []).forEach((f) => forecast.set(f.zone_id, f));
+  const ev = raw.events;
+  return {
+    hour,
+    zones: raw.zones || [],
+    forecast,
+    transport: raw.transport || [],
+    alerts: raw.alerts || [],
+    events: Array.isArray(ev) ? ev : (ev && ev.all) || [],
+    venues: raw.venues || [],
+    hotels: raw.hotels || [],
+    recs: raw.recommendations || null,
+    density: raw.density || null,
+  };
+}
+
+async function loadLive(h) {
+  const [zones, forecast, transport, alerts, events, venues, hotels] = await Promise.all([
+    getJSON(`${API}/zones?hour=${h}`),
+    getJSON(`${API}/forecast?hour=${h}`),
+    getJSON(`${API}/transport?hour=${h}`),
+    getJSON(`${API}/alerts?hour=${h}`),
+    getJSON(`${API}/events?hour=${h}`),
+    getJSON(`${API}/venues?hour=${h}`),
+    getJSON(`${API}/hotels?hour=${h}`),
+  ]);
+  return normalise(h, { zones, forecast, transport, alerts, events, venues, hotels });
+}
+
+async function loadHour(h) {
+  if (cache.has(h)) return cache.get(h);
+  let data;
+  if (STATIC) {
+    data = normalise(h, await getJSON(`data/hour-${h}.json`));
+  } else {
+    try {
+      data = await loadLive(h);
+    } catch (e) {
+      data = normalise(h, await getJSON(`data/hour-${h}.json`));
+    }
+  }
+  cache.set(h, data);
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (n) => Number(n).toLocaleString();
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function hourLabel(h) {
+  return `Day ${Math.floor(h / 24) + 1} · ${String(h % 24).padStart(2, "0")}:00`;
+}
+
+// Pressure is not raw occupancy: a zone at 40% is not "a bit warm", it is fine.
+// 35% maps to nothing and 100% to full heat, which puts the 75% warning line
+// exactly where the ramp turns amber.
+const pressure = (pct) => clamp((pct - 35) / 65, 0, 1);
+
+const STOPS = [
+  [0.00, [8, 70, 66]],
+  [0.35, [0, 196, 106]],
+  [0.62, [217, 164, 65]],
+  [0.85, [255, 120, 40]],
+  [1.00, [255, 59, 31]],
+];
+
+function ramp(p) {
+  p = clamp(p, 0, 1);
+  for (let i = 1; i < STOPS.length; i++) {
+    if (p <= STOPS[i][0]) {
+      const p0 = STOPS[i - 1][0], c0 = STOPS[i - 1][1];
+      const p1 = STOPS[i][0], c1 = STOPS[i][1];
+      const t = (p - p0) / (p1 - p0);
+      return [c0[0] + (c1[0] - c0[0]) * t, c0[1] + (c1[1] - c0[1]) * t, c0[2] + (c1[2] - c0[2]) * t];
+    }
+  }
+  return STOPS[STOPS.length - 1][1];
+}
+
+function rgba(c, a, k) {
+  k = k == null ? 1 : k;
+  return `rgba(${Math.round(clamp(c[0] * k, 0, 255))},${Math.round(clamp(c[1] * k, 0, 255))},${Math.round(clamp(c[2] * k, 0, 255))},${a})`;
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let DATA = null;
+let GEO = null;                // { pos: Map(id -> {x, y}) }
+let hour = 110;
+let mode = "now";              // "now" | "fc"
+let playing = false;
+let selected = null;
+let hovered = null;
+let reqId = 0;
+let extras = { zid: null, recs: null, density: null };
+let extraToken = 0;
+
+const zs = new Map();          // zone id -> { cur, now, fc }
+const ls = new Map();          // link id -> { cur, tgt }
+
+const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+const layers = { heat: true, towers: true, links: true, flow: !reducedMotion, labels: true, orbit: false, you: true, crowd: true, weather: true };
+const VIEW_DEFAULT = { yaw: -0.62, pitch: 0.95, zoom: 1 };
+const view = { yaw: VIEW_DEFAULT.yaw, pitch: VIEW_DEFAULT.pitch, zoom: VIEW_DEFAULT.zoom };
+
+// ---------------------------------------------------------------------------
+// Geography: lat/lng to a flat plane in km, then normalised so the whole city
+// fits roughly within [-0.85, 0.85].
+// ---------------------------------------------------------------------------
+function buildGeo(zones) {
+  const lat0 = zones.reduce((s, z) => s + z.lat, 0) / zones.length;
+  const lng0 = zones.reduce((s, z) => s + z.lng, 0) / zones.length;
+  const kx = 111.32 * Math.cos((lat0 * Math.PI) / 180);
+  const ky = 110.57;
+  const raw = zones.map((z) => ({ id: z.id, x: (z.lng - lng0) * kx, y: -(z.lat - lat0) * ky }));
+  const ext = Math.max(...raw.map((r) => Math.max(Math.abs(r.x), Math.abs(r.y)))) * 1.18 || 1;
+  const pos = new Map();
+  raw.forEach((r) => pos.set(r.id, { x: r.x / ext, y: r.y / ext }));
+  GEO = { pos };
+}
+
+// ---------------------------------------------------------------------------
+// Data -> visual state
+// ---------------------------------------------------------------------------
+function forecastAt(d, id, ahead) {
+  const f = d.forecast.get(id);
+  if (!f || !f.timeline || !f.timeline.length) return null;
+  const hit = f.timeline.find((t) => t.hour_offset === d.hour + ahead);
+  return (hit || f.timeline[f.timeline.length - 1]).predicted_occupancy_pct;
+}
+
+function applyData(d) {
+  DATA = d;
+  if (!GEO && d.zones.length) buildGeo(d.zones);
+
+  d.zones.forEach((z) => {
+    const fc = forecastAt(d, z.id, FORECAST_AHEAD);
+    const now = z.occupancy_pct;
+    let s = zs.get(z.id);
+    if (!s) {
+      s = { cur: mode === "now" ? now : (fc == null ? now : fc), now, fc: fc == null ? now : fc };
+      zs.set(z.id, s);
+    }
+    s.now = now;
+    s.fc = fc == null ? now : fc;
+  });
+
+  d.transport.forEach((l) => {
+    let s = ls.get(l.link_id);
+    if (!s) {
+      s = { cur: l.load_pct, tgt: l.load_pct };
+      ls.set(l.link_id, s);
+    }
+    s.tgt = l.load_pct;
+  });
+
+  renderKPIs();
+  renderAlerts();
+  renderDetail();
+  renderNearYou();
+  R.onData();
+  if (selected) loadExtras(selected);
+}
+
+function targetOf(s) {
+  return mode === "now" ? s.now : s.fc;
+}
+
+// ---------------------------------------------------------------------------
+// Canvas + camera
+// ---------------------------------------------------------------------------
+const cv = $("cv");
+const ctx = cv.getContext("2d");
+let W = 800, H = 600, DPR = 1;
+
+function resize() {
+  const r = cv.parentElement.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(300, Math.round(r.width));
+  H = Math.max(320, Math.round(r.height));
+  cv.width = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
+  cv.style.width = `${W}px`;
+  cv.style.height = `${H}px`;
+  if (map) {
+    map.resize();
+    // The frame can still be settling to its final size when the map first fits
+    // itself, so keep re-fitting until the user has moved the map themselves.
+    if (mapReady && mapState.fitted && !mapState.userMoved) fitCity(false);
+  }
+}
+
+const CAM = { cx: 0, cy: 0, S: 1, cosY: 1, sinY: 0, sinP: 1, cosP: 0 };
+
+const isNarrow = () => W < 600;
+
+function setCam() {
+  CAM.S = Math.min(W, H * 1.25) * (isNarrow() ? 0.5 : 0.36) * view.zoom;
+  CAM.cosY = Math.cos(view.yaw);
+  CAM.sinY = Math.sin(view.yaw);
+  CAM.sinP = Math.sin(view.pitch);
+  CAM.cosP = Math.cos(view.pitch);
+  CAM.cx = W / 2;
+  CAM.cy = H * 0.56;
+}
+
+// World (x, y, z) to screen [sx, sy, depth]. Larger depth is nearer the viewer.
+function P(x, y, z) {
+  const rx = x * CAM.cosY - y * CAM.sinY;
+  const ry = x * CAM.sinY + y * CAM.cosY;
+  return [CAM.cx + rx * CAM.S, CAM.cy + ry * CAM.S * CAM.sinP - z * CAM.S * CAM.cosP, ry];
+}
+
+// ---------------------------------------------------------------------------
+// Heat surface: a smooth field built from every zone's pressure, drawn as a
+// lit terrain mesh so it still reads correctly when the camera turns.
+// ---------------------------------------------------------------------------
+const GRID_N = 64;
+const GRID_R = 1.1;
+const SIGMA2 = 2 * 0.27 * 0.27;
+const HEAT_LIFT = 0.10;
+const GROUND_RGB = [16, 19, 20];   // roughly what the stage background is under the plate
+const FV = new Float32Array((GRID_N + 1) * (GRID_N + 1));
+const VX = new Float32Array((GRID_N + 1) * (GRID_N + 1));
+const VY = new Float32Array((GRID_N + 1) * (GRID_N + 1));
+let cellOrder = null;
+let cellOrderYaw = null;
+
+function computeField(pts) {
+  const n1 = GRID_N + 1;
+  for (let j = 0; j <= GRID_N; j++) {
+    const gy = -GRID_R + (2 * GRID_R * j) / GRID_N;
+    for (let i = 0; i <= GRID_N; i++) {
+      const gx = -GRID_R + (2 * GRID_R * i) / GRID_N;
+      // A weighted average of nearby pressures, not a sum: summing lets a ring
+      // of moderately busy zones stack up into a false red hot spot. The
+      // presence term fades the surface out with distance from any zone.
+      let sw = 0, sp = 0;
+      for (let k = 0; k < pts.length; k++) {
+        const dx = gx - pts[k].x, dy = gy - pts[k].y;
+        const w = Math.exp(-(dx * dx + dy * dy) / SIGMA2);
+        sw += w;
+        sp += w * pts[k].p;
+      }
+      FV[j * n1 + i] = sw > 1e-6 ? (sp / sw) * (1 - Math.exp(-3 * sw)) : 0;
+    }
+  }
+}
+
+function ensureCellOrder() {
+  if (cellOrder && Math.abs(cellOrderYaw - view.yaw) < 1e-4) return;
+  const cells = [];
+  for (let j = 0; j < GRID_N; j++) {
+    for (let i = 0; i < GRID_N; i++) {
+      const cx = -GRID_R + (2 * GRID_R * (i + 0.5)) / GRID_N;
+      const cy = -GRID_R + (2 * GRID_R * (j + 0.5)) / GRID_N;
+      cells.push({ idx: j * GRID_N + i, d: cx * CAM.sinY + cy * CAM.cosY });
+    }
+  }
+  cells.sort((a, b) => a.d - b.d);
+  cellOrder = cells.map((c) => c.idx);
+  cellOrderYaw = view.yaw;
+}
+
+function drawGround() {
+  const R = GRID_R;
+  const c = [P(-R, -R, 0), P(R, -R, 0), P(R, R, 0), P(-R, R, 0)];
+  ctx.beginPath();
+  ctx.moveTo(c[0][0], c[0][1]);
+  for (let i = 1; i < 4; i++) ctx.lineTo(c[i][0], c[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(255,255,255,0.025)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.045)";
+  ctx.beginPath();
+  for (let g = -1.0; g <= 1.001; g += 0.25) {
+    const a = P(g, -R, 0), b = P(g, R, 0), e = P(-R, g, 0), f = P(R, g, 0);
+    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+    ctx.moveTo(e[0], e[1]); ctx.lineTo(f[0], f[1]);
+  }
+  ctx.stroke();
+
+  const n = P(0, -R - 0.08, 0);
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.font = "600 11px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("N", n[0], n[1]);
+}
+
+function drawHeat() {
+  if (!GEO || !zs.size) return;
+
+  const pts = [];
+  zs.forEach((s, id) => {
+    const p = GEO.pos.get(id);
+    if (p) pts.push({ x: p.x, y: p.y, p: pressure(s.cur) });
+  });
+  computeField(pts);
+  ensureCellOrder();
+
+  const n1 = GRID_N + 1;
+  for (let j = 0; j <= GRID_N; j++) {
+    const gy = -GRID_R + (2 * GRID_R * j) / GRID_N;
+    for (let i = 0; i <= GRID_N; i++) {
+      const gx = -GRID_R + (2 * GRID_R * i) / GRID_N;
+      const q = P(gx, gy, FV[j * n1 + i] * HEAT_LIFT);
+      VX[j * n1 + i] = q[0];
+      VY[j * n1 + i] = q[1];
+    }
+  }
+
+  ctx.lineWidth = 0.7;
+  ctx.lineJoin = "round";
+  for (let k = 0; k < cellOrder.length; k++) {
+    const idx = cellOrder[k];
+    const i = idx % GRID_N;
+    const j = (idx - i) / GRID_N;
+    const a = j * n1 + i, b = a + 1, c = b + n1, d = a + n1;
+    const v = (FV[a] + FV[b] + FV[c] + FV[d]) / 4;
+    if (v < 0.03) continue;
+
+    // Opaque, pre-mixed against the ground colour. Translucent cells double-
+    // blend where they touch and show up as a checkerboard.
+    const fade = clamp((v - 0.03) / 0.12, 0, 1);
+    const alpha = fade * (0.28 + 0.6 * clamp(v, 0, 1));
+    const heat = ramp(v);
+    const col = `rgb(${Math.round(GROUND_RGB[0] + (heat[0] - GROUND_RGB[0]) * alpha)},${Math.round(GROUND_RGB[1] + (heat[1] - GROUND_RGB[1]) * alpha)},${Math.round(GROUND_RGB[2] + (heat[2] - GROUND_RGB[2]) * alpha)})`;
+
+    ctx.beginPath();
+    ctx.moveTo(VX[a], VY[a]);
+    ctx.lineTo(VX[b], VY[b]);
+    ctx.lineTo(VX[c], VY[c]);
+    ctx.lineTo(VX[d], VY[d]);
+    ctx.closePath();
+    ctx.fillStyle = col;
+    ctx.strokeStyle = col;
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Towers, links, redirect arcs, beacons, labels
+// ---------------------------------------------------------------------------
+const TOWER_R = 0.052;
+const TOWER_MAX_H = 0.5;
+const SIDES = 10;
+
+function ringPath(x, y, r, z, seg) {
+  ctx.beginPath();
+  for (let k = 0; k <= seg; k++) {
+    const a = (k / seg) * Math.PI * 2;
+    const q = P(x + Math.cos(a) * r, y + Math.sin(a) * r, z);
+    if (k === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]);
+  }
+}
+
+function drawPrism(x, y, h, rgb, isSel) {
+  const bt = [], tp = [];
+  for (let k = 0; k < SIDES; k++) {
+    const a = (k / SIDES) * Math.PI * 2;
+    const px = x + Math.cos(a) * TOWER_R, py = y + Math.sin(a) * TOWER_R;
+    bt.push(P(px, py, 0));
+    tp.push(P(px, py, h));
+  }
+
+  for (let k = 0; k < SIDES; k++) {
+    const k2 = (k + 1) % SIDES;
+    const am = ((k + 0.5) / SIDES) * Math.PI * 2;
+    const nx = Math.cos(am), ny = Math.sin(am);
+    const nry = nx * CAM.sinY + ny * CAM.cosY;
+    if (nry < -0.02) continue;
+    const nrx = nx * CAM.cosY - ny * CAM.sinY;
+    const b = 0.55 + 0.45 * clamp(nrx * -0.5 + nry * 0.85, 0, 1);
+
+    ctx.beginPath();
+    ctx.moveTo(bt[k][0], bt[k][1]);
+    ctx.lineTo(bt[k2][0], bt[k2][1]);
+    ctx.lineTo(tp[k2][0], tp[k2][1]);
+    ctx.lineTo(tp[k][0], tp[k][1]);
+    ctx.closePath();
+    ctx.fillStyle = rgba(rgb, 1, b);
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(tp[0][0], tp[0][1]);
+  for (let k = 1; k < SIDES; k++) ctx.lineTo(tp[k][0], tp[k][1]);
+  ctx.closePath();
+  ctx.fillStyle = rgba(rgb, 1, 1.15);
+  ctx.fill();
+  ctx.strokeStyle = isSel ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.35)";
+  ctx.lineWidth = isSel ? 2 : 1;
+  ctx.stroke();
+}
+
+function bezier(A, B, lift, t) {
+  const cx = (A.x + B.x) / 2, cy = (A.y + B.y) / 2, cz = lift;
+  const u = 1 - t;
+  return [
+    u * u * A.x + 2 * u * t * cx + t * t * B.x,
+    u * u * A.y + 2 * u * t * cy + t * t * B.y,
+    u * u * A.z + 2 * u * t * cz + t * t * B.z,
+  ];
+}
+
+function arcLift(A, B) {
+  return 0.16 + 0.5 * Math.hypot(A.x - B.x, A.y - B.y);
+}
+
+function strokeArc(A, B, steps) {
+  const lift = arcLift(A, B);
+  ctx.beginPath();
+  for (let k = 0; k <= steps; k++) {
+    const q = bezier(A, B, lift, k / steps);
+    const s = P(q[0], q[1], q[2]);
+    if (k === 0) ctx.moveTo(s[0], s[1]); else ctx.lineTo(s[0], s[1]);
+  }
+  ctx.stroke();
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function eventFor(zoneId) {
+  if (!DATA) return null;
+  let best = null;
+  DATA.events.forEach((e) => {
+    if (e.zone_id !== zoneId) return;
+    const running = DATA.hour >= e.start_hour && DATA.hour <= e.end_hour;
+    const away = e.start_hour - DATA.hour;
+    if (running) { best = { e, running: true, away: 0 }; return; }
+    if (away > 0 && away <= 6 && (!best || (!best.running && away < best.away))) {
+      best = { e, running: false, away };
+    }
+  });
+  return best;
+}
+
+let HITS = [];
+
+function render(now) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  setCam();
+  HITS = [];
+
+  drawGround();
+  if (!DATA || !GEO) return;
+  if (layers.heat) drawHeat();
+
+  const items = [];
+  const labels = [];
+
+  // Transport links.
+  if (layers.links) {
+    DATA.transport.forEach((l, li) => {
+      const a = GEO.pos.get(l.from_zone), b = GEO.pos.get(l.to_zone);
+      const st = ls.get(l.link_id);
+      if (!a || !b || !st) return;
+      const A = { x: a.x, y: a.y, z: 0.02 }, B = { x: b.x, y: b.y, z: 0.02 };
+      const mid = P((a.x + b.x) / 2, (a.y + b.y) / 2, 0.1);
+      const load = st.cur;
+      const col = ramp(pressure(load * 0.85 + 15));
+
+      items.push({
+        depth: mid[2],
+        draw() {
+          if (load >= 85) {
+            ctx.strokeStyle = rgba(col, 0.14);
+            ctx.lineWidth = 5;
+            strokeArc(A, B, 22);
+          }
+          ctx.strokeStyle = rgba(col, (0.30 + 0.45 * clamp(load / 100, 0, 1)).toFixed(3));
+          ctx.lineWidth = 1 + (l.capacity_per_hour / 3600) * 1.6;
+          strokeArc(A, B, 22);
+
+          if (layers.flow) {
+            const n = 1 + Math.floor(load / 36);
+            const lift = arcLift(A, B);
+            const dir = li % 2 === 0 ? 1 : -1;
+            for (let k = 0; k < n; k++) {
+              let u = ((now * 0.00005 * (0.4 + load / 100)) * dir + k / n + li * 0.13) % 1;
+              if (u < 0) u += 1;
+              const q = bezier(A, B, lift, u);
+              const s = P(q[0], q[1], q[2]);
+              ctx.beginPath();
+              ctx.arc(s[0], s[1], 2.1, 0, Math.PI * 2);
+              ctx.fillStyle = "rgba(255,255,255,0.9)";
+              ctx.fill();
+            }
+          }
+        },
+      });
+    });
+  }
+
+  // Redirect arcs from the selected zone to its recommended alternatives.
+  if (selected && extras.zid === selected && extras.recs && extras.recs.options) {
+    const src = GEO.pos.get(selected);
+    if (src) {
+      extras.recs.options.slice(0, 3).forEach((o, k) => {
+        const dst = GEO.pos.get(o.zone_id);
+        if (!dst) return;
+        const A = { x: src.x, y: src.y, z: 0.03 }, B = { x: dst.x, y: dst.y, z: 0.03 };
+        const mid = P((src.x + dst.x) / 2, (src.y + dst.y) / 2, 0.15);
+        items.push({
+          depth: mid[2] + 0.001,
+          draw() {
+            ctx.strokeStyle = "rgba(127,212,255,0.95)";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 5]);
+            ctx.lineDashOffset = -now * 0.03;
+            strokeArc(A, B, 24);
+            ctx.setLineDash([]);
+            ctx.lineDashOffset = 0;
+
+            const e = P(dst.x, dst.y, 0.03);
+            ctx.beginPath();
+            ctx.arc(e[0], e[1], 9, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(127,212,255,0.18)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(127,212,255,0.95)";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = "#7FD4FF";
+            ctx.font = "700 11px -apple-system, BlinkMacSystemFont, sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(String(k + 1), e[0], e[1] + 0.5);
+          },
+        });
+      });
+    }
+  }
+
+  // Zones: beacons, towers.
+  DATA.zones.forEach((z) => {
+    const p = GEO.pos.get(z.id), s = zs.get(z.id);
+    if (!p || !s) return;
+    const isSel = selected === z.id;
+    const isHov = hovered === z.id;
+    const h = clamp(s.cur / 100, 0.03, 1.05) * TOWER_MAX_H;
+    const rgb = ramp(pressure(s.cur));
+    const base = P(p.x, p.y, 0);
+    const top = P(p.x, p.y, h);
+    const ev = eventFor(z.id);
+
+    if (layers.towers) {
+      items.push({
+        depth: base[2],
+        draw() {
+          if (isSel || isHov) {
+            ringPath(p.x, p.y, TOWER_R * 2.1, 0.004, 36);
+            ctx.strokeStyle = isSel ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.5)";
+            ctx.lineWidth = isSel ? 2 : 1.2;
+            ctx.stroke();
+            ctx.fillStyle = "rgba(255,255,255,0.06)";
+            ctx.fill();
+          }
+
+          if (ev) {
+            const ph = ((now * 0.0006) % 1);
+            ringPath(p.x, p.y, TOWER_R * (1.6 + ph * 3.2), 0.004, 40);
+            ctx.strokeStyle = `rgba(255,255,255,${((1 - ph) * (ev.running ? 0.75 : 0.4)).toFixed(3)})`;
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+          }
+
+          drawPrism(p.x, p.y, h, rgb, isSel);
+
+          ringPath(p.x, p.y, TOWER_R, TOWER_MAX_H, SIDES * 2);
+          ctx.strokeStyle = "rgba(255,255,255,0.16)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          // Where the forecast takes it, drawn only when it is climbing.
+          if (mode === "now" && s.fc > s.cur + 1.5) {
+            const fh = clamp(s.fc / 100, 0.03, 1.05) * TOWER_MAX_H;
+            ringPath(p.x, p.y, TOWER_R, fh, SIDES * 2);
+            ctx.setLineDash([4, 3]);
+            ctx.strokeStyle = "rgba(255,255,255,0.8)";
+            ctx.lineWidth = 1.3;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            const l0 = P(p.x + TOWER_R, p.y, h), l1 = P(p.x + TOWER_R, p.y, fh);
+            const r0 = P(p.x - TOWER_R, p.y, h), r1 = P(p.x - TOWER_R, p.y, fh);
+            ctx.beginPath();
+            ctx.moveTo(l0[0], l0[1]); ctx.lineTo(l1[0], l1[1]);
+            ctx.moveTo(r0[0], r0[1]); ctx.lineTo(r1[0], r1[1]);
+            ctx.strokeStyle = "rgba(255,255,255,0.4)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        },
+      });
+    }
+
+    HITS.push({ id: z.id, bx: base[0], by: base[1], tx: top[0], ty: top[1], rad: TOWER_R * CAM.S * 1.25 + 4 });
+
+    // On a phone there is no room to name every zone, so only the ones under
+    // pressure (and whichever is selected) get a label; tapping any tower
+    // still opens its details.
+    if (layers.labels && (!isNarrow() || isSel || s.cur >= 75)) {
+      const lp = P(p.x, p.y, h + 0.07);
+      labels.push({ sx: lp[0], sy: lp[1], name: z.name, pct: s.cur, rgb, ev, isSel });
+    }
+  });
+
+  items.sort((a, b) => a.depth - b.depth);
+  items.forEach((it) => it.draw());
+
+  // Labels last so no tower or arc ever covers one.
+  ctx.font = "600 11px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.textBaseline = "middle";
+  labels.forEach((l) => {
+    const pct = `${l.pct.toFixed(0)}%`;
+    const wName = ctx.measureText(l.name).width;
+    const wPct = ctx.measureText(pct).width;
+    const w = wName + wPct + 22;
+    const x = clamp(l.sx - w / 2, 4, Math.max(4, W - w - 4)), y = l.sy - 26;
+
+    roundRect(x, y, w, 20, 6);
+    ctx.fillStyle = "rgba(16,16,16,0.88)";
+    ctx.fill();
+    ctx.strokeStyle = l.isSel ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#F2F2F2";
+    ctx.fillText(l.name, x + 8, y + 10.5);
+    ctx.fillStyle = rgba(l.rgb, 1, 1.25);
+    ctx.fillText(pct, x + 14 + wName, y + 10.5);
+
+    if (l.ev) {
+      const tag = l.ev.running ? `LIVE · ${l.ev.e.name}` : `in ${l.ev.away}h · ${l.ev.e.name}`;
+      const tw = ctx.measureText(tag).width + 14;
+      const tx = clamp(l.sx - tw / 2, 4, Math.max(4, W - tw - 4)), ty = y - 20;
+      roundRect(tx, ty, tw, 17, 5);
+      ctx.fillStyle = l.ev.running ? "rgba(255,59,31,0.9)" : "rgba(217,164,65,0.9)";
+      ctx.fill();
+      ctx.fillStyle = "#0A0A0A";
+      ctx.textAlign = "center";
+      ctx.fillText(tag, tx + tw / 2, ty + 9);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Animation loop
+// ---------------------------------------------------------------------------
+let lastT = 0;
+
+function step(now) {
+  const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0.016;
+  lastT = now;
+  const k = 1 - Math.exp(-dt * 5);
+
+  zs.forEach((s) => { s.cur += (targetOf(s) - s.cur) * k; });
+  ls.forEach((s) => { s.cur += (s.tgt - s.cur) * k; });
+  if (layers.orbit) view.yaw += dt * 0.12;
+}
+
+// Set by the dashboard while the embedded twin is scrolled out of view: there is no
+// point animating what nobody can see, and it keeps the page around it smooth.
+let offscreen = false;
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (offscreen) return;
+  step(now);
+  render(now);
+}
+
+// ---------------------------------------------------------------------------
+// Picking + interaction
+// ---------------------------------------------------------------------------
+function pick(px, py) {
+  let best = null, bestD = Infinity;
+  HITS.forEach((h) => {
+    const vx = h.tx - h.bx, vy = h.ty - h.by;
+    const len2 = vx * vx + vy * vy;
+    const t = len2 ? clamp(((px - h.bx) * vx + (py - h.by) * vy) / len2, 0, 1) : 0;
+    const d = Math.hypot(px - (h.bx + vx * t), py - (h.by + vy * t));
+    if (d <= h.rad && d < bestD) { best = h.id; bestD = d; }
+  });
+  return best;
+}
+
+const pointers = new Map();
+let dragMoved = false;
+let dragging = false;
+let pinchDist = 0;
+let downAt = { x: 0, y: 0 };
+
+function localXY(e) {
+  const r = cv.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+
+function showTip(id, x, y) {
+  const tip = $("tip");
+  if (!id || !DATA) { tip.style.display = "none"; return; }
+  const z = DATA.zones.find((q) => q.id === id);
+  const s = zs.get(id);
+  if (!z || !s) { tip.style.display = "none"; return; }
+  tip.textContent = `${z.name} · ${s.cur.toFixed(0)}% full · ${fmt(z.spare_capacity)} beds free`;
+  tip.style.display = "block";
+  tip.style.left = `${Math.min(x + 14, W - 230)}px`;
+  tip.style.top = `${Math.max(8, y - 34)}px`;
+}
+
+cv.addEventListener("pointerdown", (e) => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) downAt = { x: e.clientX, y: e.clientY };
+  dragging = true;
+  dragMoved = false;
+  cv.classList.add("grabbing");
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { /* not fatal */ }
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+  }
+});
+
+cv.addEventListener("pointermove", (e) => {
+  const [lx, ly] = localXY(e);
+
+  if (!dragging) {
+    const id = pick(lx, ly);
+    if (id !== hovered) hovered = id;
+    cv.style.cursor = id ? "pointer" : "grab";
+    showTip(id, lx, ly);
+    return;
+  }
+
+  const prev = pointers.get(e.pointerId);
+  if (!prev) return;
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinchDist > 0) view.zoom = clamp(view.zoom * (d / pinchDist), 0.6, 2.4);
+    pinchDist = d;
+    dragMoved = true;
+    return;
+  }
+
+  if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 4) dragMoved = true;
+  view.yaw += dx * 0.006;
+  view.pitch = clamp(view.pitch + dy * 0.004, 0.4, 1.35);
+  showTip(null);
+});
+
+function endPointer(e) {
+  const [lx, ly] = localXY(e);
+  const had = pointers.delete(e.pointerId);
+  if (pointers.size === 0) {
+    dragging = false;
+    cv.classList.remove("grabbing");
+    if (had && e.type === "pointerup" && !dragMoved) selectZone(pick(lx, ly));
+  }
+  pinchDist = 0;
+}
+cv.addEventListener("pointerup", endPointer);
+cv.addEventListener("pointercancel", endPointer);
+cv.addEventListener("pointerleave", () => { if (!dragging) { hovered = null; showTip(null); } });
+
+cv.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.001), 0.6, 2.4);
+}, { passive: false });
+
+cv.addEventListener("keydown", (e) => {
+  const k = e.key;
+  if (k === "ArrowLeft") view.yaw -= 0.1;
+  else if (k === "ArrowRight") view.yaw += 0.1;
+  else if (k === "ArrowUp") view.pitch = clamp(view.pitch - 0.05, 0.4, 1.35);
+  else if (k === "ArrowDown") view.pitch = clamp(view.pitch + 0.05, 0.4, 1.35);
+  else if (k === "+" || k === "=") view.zoom = clamp(view.zoom * 1.1, 0.6, 2.4);
+  else if (k === "-") view.zoom = clamp(view.zoom / 1.1, 0.6, 2.4);
+  else if (k === "Escape") selectZone(null);
+  else return;
+  e.preventDefault();
+});
+
+// ---------------------------------------------------------------------------
+// The visitor's position. On its own this page watches the location itself; embedded
+// in the dashboard it is told the position by the page around it, so there is one
+// permission prompt and one watch.
+// ---------------------------------------------------------------------------
+let embeddedYou = null;
+
+// ---------------------------------------------------------------------------
+// Live attendee crowd. Anonymous, opt-in and coarse: the server only reports areas
+// with several people in them (see backend/engine/presence.py). Needs the live API,
+// so on a static deploy this quietly stays off.
+// ---------------------------------------------------------------------------
+let crowd = null;
+let crowdConfig = null;
+
+async function loadCrowd() {
+  if (STATIC) return;
+  try { crowd = await getJSON(`${API}/presence/summary`); } catch (e) { crowd = null; }
+  renderHotspots();
+  renderNearYou();
+  if (DATA && selected) renderDetail();
+  R.onCrowd();
+}
+
+async function initCrowd() {
+  if (STATIC) return;
+  try { crowdConfig = await getJSON(`${API}/presence/config`); } catch (e) { return; }
+  $("crowdBtn").hidden = false;
+  $("crowdKey").hidden = false;
+  $("demoGroup").hidden = !crowdConfig.demo_enabled;
+  await loadCrowd();
+  setInterval(loadCrowd, 10000);
+}
+
+function crowdNear(lat, lng, metres) {
+  if (!crowd) return 0;
+  return crowd.cells.reduce((n, c) => n + (EPLocate.distanceKm(lat, lng, c.lat, c.lng) * 1000 <= metres ? c.count : 0), 0);
+}
+
+function renderHotspots() {
+  const box = $("hotspots");
+  if (!crowd || !crowd.hotspots || !crowd.hotspots.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.textContent = "";
+  box.appendChild(el("div", "eyebrow", "Crowd hotspots, live"));
+  box.appendChild(el("div", "sub", "Groups of attendees at places nobody has mapped: stations, junctions, streets."));
+  const wrap = el("div"); wrap.style.marginTop = "10px";
+  crowd.hotspots.slice(0, 5).forEach((h) => {
+    const row = el("div", "row click hs");
+    row.setAttribute("role", "button"); row.tabIndex = 0;
+    const left = el("div");
+    left.appendChild(el("div", "nm", `Near ${h.near || "the city"}`));
+    left.appendChild(el("div", "nt", "Not a mapped venue"));
+    row.appendChild(left);
+    row.appendChild(el("span", "cnt", `${h.count} people`));
+    const go = () => R.flyTo(h.lng, h.lat);
+    row.addEventListener("click", go);
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    wrap.appendChild(row);
+  });
+  box.appendChild(wrap);
+  box.appendChild(el("div", "sub", `Only areas with at least ${crowd.min_group} people are shown, and positions are forgotten after ${Math.round(crowd.ttl_seconds / 60)} minutes.`));
+}
+
+function youPos() {
+  if (EMBED) return embeddedYou;
+  const g = EPLocate.get();
+  return g.lat != null ? { lat: g.lat, lng: g.lng, accuracy: g.accuracy, heading: g.heading, speed: g.speed } : null;
+}
+
+// ---------------------------------------------------------------------------
+// Follow me: while on, the camera moves with the visitor, and turns to face the way
+// they're walking when the device reports a heading. Dragging the map pauses it (you
+// want to look somewhere else); zooming and tilting don't. The choice is remembered.
+// ---------------------------------------------------------------------------
+const FOLLOW_KEY = "eventpulse_follow";
+let follow = (() => { try { return localStorage.getItem(FOLLOW_KEY) !== "off"; } catch (e) { return true; } })();
+const FOLLOW_ZOOM = 15.4, FOLLOW_PITCH = 62;
+let followLast = null;           // { lat, lng, bearing } the camera last moved to
+
+function setFollow(on) {
+  follow = !!on;
+  try { localStorage.setItem(FOLLOW_KEY, follow ? "on" : "off"); } catch (e) { /* this page only */ }
+  followLast = null;
+  paintFollow();
+  if (follow) followUpdate(true);
+}
+
+function paintFollow() {
+  const b = $("locateMe");
+  if (!b) return;
+  const has = !!youPos();
+  b.textContent = !has ? "Locate me" : follow ? "Following you" : "Follow me";
+  b.setAttribute("aria-pressed", String(has && follow));
+  b.title = !has ? "Use your location" : follow ? "The map moves with you. Drag the map, or click here, to stop." : "Move the map with you as you walk";
+}
+
+function followUpdate(jump) {
+  if (!follow || !map || !mapReady) return;
+  const p = youPos();
+  if (!p) return;
+  const moving = Number.isFinite(p.heading) && (p.speed == null || p.speed > 0.7);
+  const bearing = moving ? p.heading : map.getBearing();
+  if (!jump && followLast && EPLocate.distanceKm(followLast.lat, followLast.lng, p.lat, p.lng) < 0.002 &&
+      Math.abs(bearing - followLast.bearing) < 4) return;
+  mapState.userMoved = true;     // a fit-the-city resize must not yank the camera away
+  if (jump || !followLast || map.getZoom() < 13.5) {
+    map.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), FOLLOW_ZOOM), pitch: FOLLOW_PITCH, bearing, duration: 1600 });
+  } else {
+    map.easeTo({ center: [p.lng, p.lat], bearing, duration: 1000, easing: (t) => t });
+  }
+  followLast = { lat: p.lat, lng: p.lng, bearing };
+}
+
+let nearTimer = null;
+function youChanged() {
+  // Position updates can arrive every second; the panel only needs to keep up with walking pace.
+  R.onYou();
+  paintFollow();
+  followUpdate(false);
+  if (nearTimer) return;
+  nearTimer = setTimeout(() => { nearTimer = null; renderNearYou(); }, 800);
+}
+
+function zoneName(id) { const z = DATA && DATA.zones.find((q) => q.id === id); return z ? z.name : id; }
+
+function renderNearYou() {
+  const box = $("nearYou");
+  if (!box) return;
+  box.textContent = "";
+  const g = EPLocate.get();
+  const pos = youPos();
+
+  const head = el("h3");
+  head.appendChild(el("span", "youdot"));
+  head.appendChild(document.createTextNode("Near you"));
+  box.appendChild(el("div", "eyebrow", "Live, from your location"));
+  box.appendChild(head);
+
+  if (!pos) {
+    const why = { denied: "Location is blocked for this site. Allow it in your browser's address bar to see crowding and stays around you.",
+      unavailable: "This device can't share a location right now.", off: "Location is off. Turn it on to see how busy it is around you and which stays are closest.",
+      asking: "Waiting for your browser's permission..." }[g.status] || "Waiting for your location...";
+    box.appendChild(el("div", "empty", why));
+    if (g.status === "off" || g.status === "denied" || g.status === "unavailable") {
+      const b = el("button", "cta", g.status === "off" ? "Turn location on" : "Try again");
+      b.type = "button"; b.addEventListener("click", () => EPLocate.start());
+      box.appendChild(b);
+    }
+    return;
+  }
+  if (!DATA) { box.appendChild(el("div", "empty", "Loading the city...")); return; }
+
+  const near = EPLocate.nearestZone(DATA.zones, pos.lat, pos.lng);
+  if (!near || near.km > 25) {
+    box.appendChild(el("div", "empty", "You're outside the area this deployment covers, so there's nothing live to show near you."));
+    return;
+  }
+  const z = near.zone, a = EPLocate.assess(z.occupancy_pct);
+  const t = el("div", "sub");
+  t.appendChild(document.createTextNode(`You're closest to ${z.name}`));
+  t.appendChild(el("span", `lvl ${a.level}`, a.label));
+  box.appendChild(t);
+  box.appendChild(barRow("How busy it is there", z.occupancy_pct, `${z.occupancy_pct.toFixed(0)}%`));
+  box.appendChild(el("div", "sub", a.advice));
+
+  if (crowd) {
+    const n = crowdNear(pos.lat, pos.lng, 600);
+    if (n >= (crowd.min_group || 3)) {
+      const c = el("div", "sub"); c.style.marginTop = "8px";
+      c.textContent = `${n} people within about 600 m of you are sharing their location, so it is busy right around you.`;
+      box.appendChild(c);
+    }
+  }
+
+  const link = EPLocate.busiestLink(DATA.transport, z.id);
+  if (link) {
+    const other = link.from_zone === z.id ? link.to_zone : link.from_zone;
+    const la = EPLocate.assess(link.load_pct);
+    const row = el("div", "sub");
+    row.style.marginTop = "8px";
+    row.textContent = `Busiest link from here: ${link.mode} to ${zoneName(other)}, ${link.load_pct.toFixed(0)}% loaded (${la.label.toLowerCase()}).`;
+    box.appendChild(row);
+  }
+
+  const zonesById = {};
+  DATA.zones.forEach((q) => { zonesById[q.id] = q; });
+  const stays = EPLocate.rankHotels(DATA.hotels, pos.lat, pos.lng, zonesById, 4);
+  if (stays.length) {
+    const sec = el("div"); sec.style.marginTop = "16px";
+    sec.appendChild(el("div", "eyebrow", "Stays near you, nearest first"));
+    stays.forEach((r) => {
+      const row = el("div", "row click stay");
+      row.setAttribute("role", "button"); row.tabIndex = 0;
+      const left = el("div");
+      left.appendChild(el("div", "nm", r.hotel.name));
+      left.appendChild(el("div", "nt", r.reason));
+      row.appendChild(left);
+      row.appendChild(el("div", "price", `Rs ${Number(r.hotel.nightly_rate).toLocaleString()} / night`));
+      const go = () => { selectZone(r.hotel.zone_id); R.flyTo(r.hotel.lng, r.hotel.lat); };
+      row.addEventListener("click", go);
+      row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+      sec.appendChild(row);
+    });
+    sec.appendChild(el("div", "sub", "These update as you move."));
+    box.appendChild(sec);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Weather twin. Live weather, public reports and a learned model of how weather
+// moves through the city (backend engine/weather_twin.py). "Live" shows the twin
+// under today's real weather; "What-if" runs any weather you set against it. Every
+// what-if is a simulation on a copy: the live system never changes.
+// ---------------------------------------------------------------------------
+const wx = {
+  available: false, mode: "live", state: null, sim: null, social: null, model: null,
+  params: { rain_mm_h: 25, duration_h: 3, temp_c: 28, wind_kmh: 30 }, area: "city", radius_km: 3, center: null,
+  baseline: "live", placing: false, timer: null, liveTimer: null, busy: 0, error: "",
+  plan: null, planBusy: 0,
+};
+const WX_PRESETS = [
+  { id: "normal", label: "Normal day", p: { rain_mm_h: 0, duration_h: 3, temp_c: 30, wind_kmh: 10 }, area: "city" },
+  { id: "monsoon", label: "Heavy monsoon", p: { rain_mm_h: 25, duration_h: 3, temp_c: 27, wind_kmh: 35 }, area: "city" },
+  { id: "cloudburst", label: "Cloudburst", p: { rain_mm_h: 80, duration_h: 2, temp_c: 26, wind_kmh: 45 }, area: "cell", radius: 3 },
+  { id: "heat", label: "Heatwave", p: { rain_mm_h: 0, duration_h: 5, temp_c: 44, wind_kmh: 12 }, area: "city" },
+  { id: "cyclone", label: "Cyclone", p: { rain_mm_h: 45, duration_h: 6, temp_c: 27, wind_kmh: 110 }, area: "city" },
+];
+const WX_SLIDERS = [
+  { k: "rain_mm_h", label: "Rain intensity", min: 0, max: 120, step: 1, unit: " mm/h" },
+  { k: "duration_h", label: "How long it lasts", min: 0.5, max: 12, step: 0.5, unit: " h" },
+  { k: "temp_c", label: "Temperature (feels like)", min: 18, max: 48, step: 1, unit: " °C" },
+  { k: "wind_kmh", label: "Wind gusts", min: 0, max: 150, step: 5, unit: " km/h" },
+];
+
+function wxCurrent() { return wx.mode === "sim" ? wx.sim : wx.state; }
+
+async function wxLoadLive() {
+  if (STATIC) return;
+  try {
+    const [st, so] = await Promise.all([getJSON(`${API}/weather-twin/state?hour=${hour}`), getJSON(`${API}/weather/social`)]);
+    wx.state = st; wx.social = so; wx.available = true; wx.error = "";
+    if (!wx.model) wx.model = await getJSON(`${API}/weather-twin/model`).catch(() => null);
+  } catch (e) { wx.error = "The weather twin needs the live API."; }
+  wxRender();
+}
+
+function wxScenarioBody() {
+  const b = { ...wx.params, hour, baseline: wx.baseline, label: "What-if" };
+  if (wx.area === "cell") {
+    const c = wx.center || (selected ? { zone_id: selected } : { zone_id: "Z04" });
+    b.center = c; b.radius_km = wx.radius_km;
+  }
+  return b;
+}
+
+async function wxRunSim() {
+  const my = ++wx.busy;
+  try {
+    const res = await fetch(`${API}/weather-twin/simulate`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(wxScenarioBody()) });
+    const d = await res.json();
+    if (my !== wx.busy) return;
+    if (!res.ok) { wx.error = d.detail || "The simulation failed."; wxRender(); return; }
+    wx.sim = d; wx.error = "";
+  } catch (e) { if (my === wx.busy) wx.error = "Couldn't reach the API to simulate."; }
+  if (my === wx.busy) { wx.plan = null; wxRender(); wxLoadPlan(); }
+}
+
+// The operator's plan for this what-if, written by EventPulse's Nugen-aligned model
+// (or the playbook when that isn't available). Slower than the simulation, so it
+// follows it rather than holding it up.
+async function wxLoadPlan() {
+  const my = ++wx.planBusy;
+  try {
+    const res = await fetch(`${API}/weather-twin/plan`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(wxScenarioBody()) });
+    const d = await res.json();
+    if (my !== wx.planBusy || !res.ok) return;
+    wx.plan = d; wxRender();
+  } catch (e) { /* the what-if works without it */ }
+}
+
+function planBlock(p) {
+  const box = el("div", "plan");
+  const head = el("div", "phead");
+  head.appendChild(el("b", null, "Recommended actions"));
+  const src = p.source === "nugen"
+    ? `EventPulse model on Nugen${p.confidence != null ? ` \u00B7 confidence ${Math.round(p.confidence)}%` : ""}`
+    : "EventPulse playbook";
+  const badge = el("span", `src ${p.source}`, src);
+  if (p.source !== "nugen") badge.title = p.rejected ? `The aligned model's answer wasn't used: ${p.rejected}` : "The Nugen-aligned model isn't configured on this server.";
+  head.appendChild(badge);
+  box.appendChild(head);
+  const ol = el("ol");
+  p.actions.forEach((a) => ol.appendChild(el("li", null, a)));
+  box.appendChild(ol);
+  if (p.attendee_message) box.appendChild(el("div", "amsg", `Attendee message: ${p.attendee_message}`));
+  return box;
+}
+
+function wxSchedule() {
+  clearTimeout(wx.timer);
+  wx.timer = setTimeout(wxRunSim, 250);
+}
+
+function wxSetMode(m) {
+  wx.mode = m; wx.placing = false;
+  if (m === "sim") wxRunSim(); else wxRender();
+}
+
+function wxPlaceStorm(lat, lng) {
+  wx.center = { lat, lng }; wx.placing = false; wx.area = "cell";
+  wxRunSim(); wxRender();
+}
+
+function wxShowSocialAt(zoneId) {
+  const box = $("wxSocial");
+  if (box) box.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+  wx.socialZone = zoneId; wxRender();
+}
+
+function rangeBar(q, max) {
+  const r = el("div", "range");
+  const band = el("i"); band.style.left = `${clamp(q.p10 / max, 0, 1) * 100}%`;
+  band.style.width = `${Math.max(1, (clamp(q.p90 / max, 0, 1) - clamp(q.p10 / max, 0, 1)) * 100)}%`;
+  const tick = el("em"); tick.style.left = `${clamp(q.p50 / max, 0, 1) * 100}%`;
+  r.appendChild(band); r.appendChild(tick);
+  return r;
+}
+
+function wxKpi(label, q, fmtv, max, base) {
+  const d = el("div");
+  d.appendChild(el("small", null, label));
+  d.appendChild(el("b", null, fmtv(q.p50)));
+  d.appendChild(el("small", null, `likely ${fmtv(q.p10)}–${fmtv(q.p90)}${base != null ? ` · normally ${fmtv(base)}` : ""}`));
+  d.appendChild(rangeBar(q, max));
+  return d;
+}
+
+function wxAgo(h) {
+  if (h == null) return "";
+  return h < 1 ? `${Math.max(1, Math.round(h * 60))} min ago` : h < 48 ? `${Math.round(h)} h ago` : `${Math.round(h / 24)} days ago`;
+}
+
+function wxRender() {
+  const box = $("weather");
+  if (!box) return;
+  box.hidden = STATIC && !wx.available;
+  box.textContent = "";
+  $("wxBtn").hidden = !wx.available;
+  $("wxKey").hidden = !wx.available || !layers.weather;
+  $("wxBanner").hidden = wx.mode !== "sim";
+  $("wxHint").hidden = !wx.placing;
+  R.onWeather();
+  if (!wx.available) {
+    box.appendChild(el("div", "eyebrow", "Weather twin"));
+    box.appendChild(el("div", "empty", wx.error || "Loading live weather..."));
+    return;
+  }
+  const st = wx.state, live = st.live;
+  box.appendChild(el("div", "eyebrow", "Weather twin · live"));
+
+  // -- weather now
+  if (live.available) {
+    const c = live.city;
+    const now = el("div", "now");
+    now.appendChild(el("span", "t", `${Math.round(c.temp_c)}°`));
+    now.appendChild(el("span", "c", c.condition));
+    now.appendChild(el("span", "sub", `feels like ${Math.round(c.apparent_c)}°`));
+    box.appendChild(now);
+    const f = el("div", "facts");
+    [[`${c.rain_mm_h_max} mm/h`, "Rain now"], [`${c.rain_next_6h_mm_max} mm`, `Next 6 h · ${Math.round(c.max_prob_next_6h)}%`],
+     [`${Math.round(c.gust_kmh_max)} km/h`, "Gusts"]].forEach(([v, k]) => { const d = el("div"); d.appendChild(el("b", null, v)); d.appendChild(el("span", null, k)); f.appendChild(d); });
+    box.appendChild(f);
+    box.appendChild(el("div", "src", `${live.source}${live.stale ? " (last good reading)" : ""} · ${live.time ? live.time.replace("T", " ") : ""} · refreshes every 10 min`));
+  } else {
+    box.appendChild(el("div", "empty", `${live.error || "Live weather unavailable."} The twin assumes calm weather until it's back.`));
+  }
+
+  // -- what-if
+  box.appendChild(el("h4", null, "What if the weather changes?"));
+  const seg = el("div", "seg2");
+  [["live", "Live"], ["sim", "What-if"]].forEach(([m, t]) => {
+    const b = el("button", null, t); b.setAttribute("aria-pressed", String(wx.mode === m));
+    b.addEventListener("click", () => wxSetMode(m)); seg.appendChild(b);
+  });
+  box.appendChild(seg);
+  if (wx.mode === "sim") wxControls(box);
+  else box.appendChild(el("div", "note", "Try heavier rain, a cloudburst over one area, a heatwave or a cyclone and watch the effects spread through transport, the venue and hotels. The live system is never changed."));
+
+  // -- what the twin expects today (live only; a what-if shows its own effects above)
+  if (wx.mode === "live") {
+    const liveFx = (st.effects || []).filter((e) => !e.folded);
+    box.appendChild(el("h4", null, "What today's weather is doing"));
+    if (!liveFx.length) box.appendChild(el("div", "empty", "Nothing measurable: today's weather isn't changing how the city moves compared with a normal day."));
+    else wxEffects(box, liveFx.slice(0, 5), false);
+  }
+
+
+  // -- social
+  const so = wx.social;
+  const sBox = el("div"); sBox.id = "wxSocial";
+  sBox.appendChild(el("h4", null, "What people are reporting"));
+  if (!so || !so.available) sBox.appendChild(el("div", "empty", "Couldn't reach Mastodon or Google News just now."));
+  else {
+    const chips = el("div", "chips");
+    const names = { flooding: "Flooding", transport: "Transport", alert: "Alerts", heat: "Heat", power: "Power", clear: "All clear" };
+    Object.keys(names).forEach((k) => { const n = so.counts_24h[k] || 0; if (n) chips.appendChild(el("span", k === "flooding" || k === "transport" ? "hot" : "", `${names[k]} ${n}`)); });
+    if (!chips.children.length) chips.appendChild(el("span", null, so.items.length ? "Nothing new in 24 h · earlier reports below" : "No weather trouble reported"));
+    sBox.appendChild(chips);
+    (so.emerging || []).forEach((e) => {
+      const d = el("div", "post alert");
+      d.appendChild(el("b", null, `Emerging: ${e.category} reports up ${e.times_usual}\u00D7 in the last 6 h${e.places.length ? ` around ${e.places.join(", ")}` : ""}`));
+      sBox.appendChild(d);
+    });
+    const moods = so.moods_48h || {};
+    const nPeople = Object.values(moods).reduce((a, b) => a + b, 0);
+    if (nPeople) {
+      sBox.appendChild(el("div", "note", `Travellers in 48 h: ${moods.frustrated || 0} frustrated, ${moods.worried || 0} worried, ${moods.relieved || 0} relieved, ${moods.reporting || 0} just reporting.`));
+    }
+    let items = so.items;
+    if (wx.socialZone) {
+      items = items.filter((i) => i.places.some((p) => p.zone_id === wx.socialZone));
+      const z = zoneName(wx.socialZone);
+      const back = el("button", null, `Showing reports near ${z} · show all`); back.style.cssText = "padding:3px 8px;font-size:11.5px;margin-bottom:6px";
+      back.addEventListener("click", () => { wx.socialZone = null; wxRender(); });
+      sBox.appendChild(back);
+    }
+    items.slice(0, 5).forEach((i) => {
+      const d = el("div", `post ${i.categories[0]}`);
+      d.appendChild(el("span", null, i.text));
+      d.appendChild(el("small", null, `${i.source}${i.author ? ` · ${i.author}` : ""} · ${wxAgo(i.age_h)}${i.places.length ? ` · ${i.places.map((p) => p.place).join(", ")}` : ""}`));
+      sBox.appendChild(d);
+    });
+    sBox.appendChild(el("div", "note", "Public Reddit (r/mumbai, r/india) and Mastodon posts and news headlines, sorted by keyword. Fresh flooding reports near a zone raise its flood estimate; their weight halves every 6 hours."));
+  }
+  box.appendChild(sBox);
+
+  // -- model
+  if (wx.model) {
+    const det = el("details");
+    det.appendChild(el("summary", null, "What the model has learned"));
+    const ul = el("ul");
+    Object.values(wx.model.learned).forEach((c) => ul.appendChild(el("li", null, `${c.plain} From ${fmt(c.rows)} hours of city history${c.live_updates ? ` and ${c.live_updates} field report${c.live_updates === 1 ? "" : "s"}` : ""}.`)));
+    ul.appendChild(el("li", null, `Assumed, not learned (no examples in the history): ${wx.model.assumed.map((a) => a.meaning).slice(0, 4).join("; ")}; and ${wx.model.assumed.length - 4} more.`));
+    ul.appendChild(el("li", null, wx.model.intensity_note));
+    ul.appendChild(el("li", null, `Each answer comes from ${wx.state.draws} simulated runs; ranges are the 10th to 90th percentile.`));
+    det.appendChild(ul);
+    box.appendChild(det);
+  }
+}
+
+function wxControls(box) {
+  const pre = el("div", "presets");
+  WX_PRESETS.forEach((p) => {
+    const b = el("button", null, p.label);
+    b.addEventListener("click", () => {
+      wx.params = { ...p.p }; wx.area = p.area; if (p.radius) wx.radius_km = p.radius;
+      if (p.area === "cell" && !wx.center) wx.center = null;
+      wxRunSim(); wxRender();
+    });
+    pre.appendChild(b);
+  });
+  box.appendChild(pre);
+
+  WX_SLIDERS.forEach((sl) => {
+    const wrap = el("div", "slider");
+    const top = el("div", "top");
+    const lab = el("label", null, sl.label); lab.htmlFor = `wx-${sl.k}`;
+    const val = el("b", null, `${wx.params[sl.k]}${sl.unit}`);
+    top.appendChild(lab); top.appendChild(val);
+    const inp = el("input"); inp.type = "range"; inp.id = `wx-${sl.k}`;
+    inp.min = sl.min; inp.max = sl.max; inp.step = sl.step; inp.value = wx.params[sl.k];
+    inp.addEventListener("input", () => { wx.params[sl.k] = Number(inp.value); val.textContent = `${inp.value}${sl.unit}`; wxSchedule(); });
+    wrap.appendChild(top); wrap.appendChild(inp);
+    box.appendChild(wrap);
+  });
+
+  const area = el("div", "seg2");
+  [["city", "Whole city"], ["cell", "Storm cell"]].forEach(([a, t]) => {
+    const b = el("button", null, t); b.setAttribute("aria-pressed", String(wx.area === a));
+    b.addEventListener("click", () => { wx.area = a; wxRunSim(); wxRender(); }); area.appendChild(b);
+  });
+  if (wx.area === "cell") {
+    const place = el("button", wx.placing ? "placing" : "", wx.placing ? "Click the map..." : "Place on map");
+    place.addEventListener("click", () => { wx.placing = !wx.placing; wxRender(); });
+    area.appendChild(place);
+  }
+  box.appendChild(area);
+  if (wx.area === "cell") {
+    const wrap = el("div", "slider");
+    const top = el("div", "top"); const lab = el("label", null, "Storm radius"); lab.htmlFor = "wx-radius";
+    const val = el("b", null, `${wx.radius_km} km`); top.appendChild(lab); top.appendChild(val);
+    const inp = el("input"); inp.type = "range"; inp.id = "wx-radius"; inp.min = 1; inp.max = 12; inp.step = 0.5; inp.value = wx.radius_km;
+    inp.addEventListener("input", () => { wx.radius_km = Number(inp.value); val.textContent = `${inp.value} km`; wxSchedule(); });
+    wrap.appendChild(top); wrap.appendChild(inp); box.appendChild(wrap);
+    const c = wx.center;
+    box.appendChild(el("div", "note", c ? (c.zone_id ? `Centred on ${zoneName(c.zone_id)}.` : `Centred at ${c.lat.toFixed(3)}, ${c.lng.toFixed(3)}.`)
+      : `Centred on ${zoneName(selected || "Z04")}. Use "Place on map" to move it.`));
+  }
+  const bl = el("div", "seg2");
+  bl.appendChild(el("span", "sub", "Compare with"));
+  const sel = el("select"); sel.setAttribute("aria-label", "Compare with");
+  [["live", "the weather right now"], ["normal", "a normal day"]].forEach(([v, t]) => { const o = el("option", null, t); o.value = v; if (wx.baseline === v) o.selected = true; sel.appendChild(o); });
+  sel.addEventListener("change", () => { wx.baseline = sel.value; wxRunSim(); });
+  bl.appendChild(sel);
+  box.appendChild(bl);
+
+  if (wx.error) { box.appendChild(el("div", "empty", wx.error)); return; }
+  const r = wx.sim;
+  if (!r) { box.appendChild(el("div", "empty", "Simulating...")); return; }
+  const k = el("div", "kpis");
+  const c = r.city;
+  k.appendChild(wxKpi("Visitors stranded", c.stranded, (v) => fmt(Math.round(v)), Math.max(1000, c.stranded.p90)));
+  k.appendChild(wxKpi("Worst flood risk", c.max_flood_pct, (v) => `${Math.round(v)}%`, 100));
+  if (r.venue) k.appendChild(wxKpi(`${r.venue.venue_name} empties in`, r.venue.hours_to_clear, (v) => `${v.toFixed(1)} h`,
+    Math.max(4, r.venue.hours_to_clear.p90), r.venue.hours_to_clear_baseline));
+  k.appendChild(wxKpi("Links cut to 60% or less", c.links_disrupted, (v) => String(Math.round(v)), r.links.length));
+  box.appendChild(k);
+  if (wx.plan) box.appendChild(planBlock(wx.plan));
+  else box.appendChild(el("div", "note", "Writing the operator plan..."));
+  const fx = r.effects.filter((e) => !e.folded);
+  if (!fx.length) box.appendChild(el("div", "empty", "No measurable difference from the comparison weather."));
+  else wxEffects(box, fx, true);
+  box.appendChild(el("div", "note", `${r.draws} simulated runs. "Likely" is the 10th to 90th percentile. Compared with ${r.baseline.label.toLowerCase()}.`));
+}
+
+function wxEffects(box, fx, headings) {
+  let last = 0;
+  const title = { 1: "1st order · weather hits places", 2: "2nd order · the network responds", 3: "3rd order · people and businesses" };
+  fx.forEach((e) => {
+    if (headings && e.order !== last) { box.appendChild(el("div", "ord", title[e.order])); last = e.order; }
+    const d = el("div", `fx o${e.order}${e.kind === "summary" ? " summary" : ""}${e.lat != null ? " click" : ""}`, e.text);
+    if (e.lat != null) {
+      d.setAttribute("role", "button"); d.tabIndex = 0;
+      const go = () => { if (e.zone_id) selectZone(e.zone_id); R.flyTo(e.lng, e.lat); };
+      d.addEventListener("click", go);
+      d.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+    }
+    box.appendChild(d);
+  });
+}
+
+// Map features for whichever result is showing.
+function wxFeatures() {
+  const E = emptyFC();
+  const r = wxCurrent();
+  if (!r || !layers.weather) return { zones: E, flood: E, links: E, chain: E, storm: E, social: E };
+  const liveZ = new Map(((wx.state && wx.state.live && wx.state.live.zones) || []).map((z) => [z.zone_id, z]));
+  const zones = { type: "FeatureCollection", features: r.zones.map((z) => {
+    const lz = liveZ.get(z.zone_id);
+    const temp = wx.mode === "sim" ? r.scenario.temp_c : (lz ? lz.temp_c : null);
+    const bits = [];
+    if (z.rain_mm_h >= 0.2) bits.push(`${z.rain_mm_h >= 10 ? Math.round(z.rain_mm_h) : z.rain_mm_h} mm/h`);
+    if (temp != null) bits.push(`${Math.round(temp)}°`);
+    if (z.flood_pct.p50 >= 15) bits.push(`flood ${Math.round(z.flood_pct.p50)}%`);
+    return feat({ type: "Point", coordinates: [z.lng, z.lat] }, { id: z.zone_id, rain: z.rain_mm_h, label: bits.join(" · ") });
+  }) };
+  const flood = { type: "FeatureCollection", features: r.zones.filter((z) => z.flood_pct.p50 >= 10).map((z) =>
+    feat({ type: "Polygon", coordinates: [circleRing(z.lng, z.lat, 750, 28)] }, { p: z.flood_pct.p50 / 100 })) };
+  const links = { type: "FeatureCollection", features: r.links.filter((l) => l.capacity_pct_baseline - l.capacity_pct.p50 >= 10).map((l) =>
+    feat({ type: "LineString", coordinates: [l.from, l.to] }, { lost: l.capacity_pct_baseline - l.capacity_pct.p50 })) };
+  const byId = new Map(r.effects.map((e) => [e.id, e]));
+  const chain = { type: "FeatureCollection", features: r.effects.filter((e) => e.cause && e.lat != null && byId.get(e.cause) && byId.get(e.cause).lat != null)
+    .filter((e) => { const c = byId.get(e.cause); return Math.abs(c.lat - e.lat) + Math.abs(c.lng - e.lng) > 1e-4; })
+    .map((e) => { const c = byId.get(e.cause); return feat({ type: "LineString", coordinates: [[c.lng, c.lat], [e.lng, e.lat]] }, { order: e.order }); }) };
+  let storm = E;
+  const sc = r.scenario;
+  if (wx.mode === "sim" && sc && sc.center && sc.radius_km) {
+    storm = { type: "FeatureCollection", features: [feat({ type: "Polygon", coordinates: [circleRing(sc.center.lng, sc.center.lat, sc.radius_km * 1000, 48)] })] };
+  }
+  const so = wx.social;
+  const counts = new Map();
+  ((so && so.items) || []).forEach((i) => i.places.forEach((p) => {
+    const c = counts.get(p.zone_id) || { n: 0, lat: p.lat, lng: p.lng };
+    c.n += 1; counts.set(p.zone_id, c);
+  }));
+  const social = { type: "FeatureCollection", features: [...counts.entries()].map(([zid, c]) =>
+    feat({ type: "Point", coordinates: [c.lng, c.lat] }, { zone_id: zid, n: c.n })) };
+  return { zones, flood, links, chain, storm, social };
+}
+
+// The event the weather can touch depends on the hour, so a new hour refreshes the twin
+// (after a pause, so a playing clock doesn't ask every tick).
+let wxHourTimer = null;
+function wxOnHour() {
+  if (STATIC || !wx.available) return;
+  clearTimeout(wxHourTimer);
+  wxHourTimer = setTimeout(() => { if (wx.mode === "sim") wxRunSim(); else wxLoadLive(); }, 1200);
+}
+
+function initWeather() {
+  if (STATIC) return;
+  wxLoadLive();
+  wx.liveTimer = setInterval(() => { if (wx.mode === "live") wxLoadLive(); }, 60000);
+  $("wxBackLive").addEventListener("click", () => wxSetMode("live"));
+  if (params0.get("weather") === "whatif") setTimeout(() => wxSetMode("sim"), 400);
+}
+
+// ---------------------------------------------------------------------------
+// Panels
+// ---------------------------------------------------------------------------
+function severityOf(pct) {
+  return pct >= 95 ? "critical" : pct >= 75 ? "warning" : "ok";
+}
+
+function renderKPIs() {
+  const box = $("kpis");
+  box.textContent = "";
+  if (!DATA) return;
+
+  const cap = DATA.zones.reduce((s, z) => s + z.hotel_capacity, 0);
+  const occ = DATA.zones.reduce((s, z) => s + z.current_occupancy, 0);
+  const citywide = cap ? (occ / cap) * 100 : 0;
+  const saturated = DATA.zones.filter((z) => z.occupancy_pct >= 95).length;
+  const critical = DATA.alerts.filter((a) => a.severity === "critical").length;
+
+  const cells = [
+    [`${citywide.toFixed(0)}%`, "Citywide occupancy", severityOf(citywide) === "ok" ? "good" : severityOf(citywide) === "warning" ? "warn" : "crit"],
+    [`${saturated}/${DATA.zones.length}`, "Zones at capacity", saturated ? "crit" : "good"],
+    [String(critical), "Critical alerts", critical ? "crit" : "good"],
+    [fmt(Math.max(0, cap - occ)), "Beds still open", "good"],
+  ];
+  cells.forEach(([n, l, cls]) => {
+    const k = el("div", "kpi");
+    k.appendChild(el("div", `n ${cls}`, n));
+    k.appendChild(el("div", "l", l));
+    box.appendChild(k);
+  });
+}
+
+function renderAlerts() {
+  const box = $("alerts");
+  box.textContent = "";
+  if (!DATA || !DATA.alerts.length) {
+    box.appendChild(el("div", "empty", "Nothing above threshold. Capacity is holding."));
+    return;
+  }
+  DATA.alerts.slice(0, 6).forEach((a) => {
+    const row = el("div", "row click");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+
+    const left = el("div");
+    const nm = el("div", "nm");
+    nm.appendChild(el("span", `dot ${a.severity === "critical" ? "critical" : "warning"}`));
+    nm.appendChild(document.createTextNode(a.title || a.zone_name));
+    left.appendChild(nm);
+    left.appendChild(el("div", "nt", a.message));
+    row.appendChild(left);
+    row.appendChild(el("b", null, `${Number(a.current_pct).toFixed(0)}%`));
+
+    const go = () => selectZone(a.zone_id);
+    row.addEventListener("click", go);
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    box.appendChild(row);
+  });
+}
+
+function barRow(label, pct, value) {
+  const r = el("div", "barrow");
+  const top = el("div", "top");
+  top.appendChild(el("span", null, label));
+  top.appendChild(el("b", null, value));
+  r.appendChild(top);
+  const bar = el("div", "bar");
+  const fill = el("i");
+  fill.style.width = `${clamp(pct, 0, 100)}%`;
+  fill.style.background = rgba(ramp(pressure(pct)), 1);
+  bar.appendChild(fill);
+  r.appendChild(bar);
+  return r;
+}
+
+function stat(k, v) {
+  const s = el("div", "stat");
+  s.appendChild(el("div", "k", k));
+  s.appendChild(el("div", "v", v));
+  return s;
+}
+
+function venueFor(zid) {
+  if (!DATA) return null;
+  const list = DATA.venues.filter((v) => v.zone_id === zid);
+  if (!list.length) return null;
+  const live = list.find((v) => DATA.hour >= v.start_hour && DATA.hour <= v.end_hour);
+  const next = list.filter((v) => v.start_hour > DATA.hour).sort((a, b) => a.start_hour - b.start_hour)[0];
+  // An event's gates stay busy through its egress surge, so prefer whichever is
+  // nearest in time rather than only ones that are strictly underway.
+  const recent = list.filter((v) => v.end_hour < DATA.hour).sort((a, b) => b.end_hour - a.end_hour)[0];
+  if (live) return live;
+  if (recent && DATA.hour - recent.end_hour <= 4) return recent;
+  return next || recent || list[0];
+}
+
+function renderDetail() {
+  const box = $("detail");
+  box.textContent = "";
+
+  if (!DATA) {
+    box.appendChild(el("div", "empty", "Loading city data..."));
+    return;
+  }
+
+  if (!selected) {
+    box.appendChild(el("div", "eyebrow", "Overview"));
+    box.appendChild(el("h3", null, "Where the pressure is"));
+    box.appendChild(el("div", "sub", "Click a tower or an alert to inspect a zone."));
+    const ranked = DATA.zones.slice().sort((a, b) => b.occupancy_pct - a.occupancy_pct).slice(0, 5);
+    const wrap = el("div");
+    wrap.style.marginTop = "12px";
+    ranked.forEach((z) => {
+      const row = el("div", "row click");
+      row.setAttribute("role", "button");
+      row.tabIndex = 0;
+      const left = el("div");
+      left.appendChild(el("div", "nm", z.name));
+      left.appendChild(el("div", "nt", `${fmt(z.spare_capacity)} beds free`));
+      row.appendChild(left);
+      row.appendChild(el("b", null, `${z.occupancy_pct.toFixed(0)}%`));
+      const go = () => selectZone(z.id);
+      row.addEventListener("click", go);
+      row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+      wrap.appendChild(row);
+    });
+    box.appendChild(wrap);
+    return;
+  }
+
+  const z = DATA.zones.find((q) => q.id === selected);
+  if (!z) { box.appendChild(el("div", "empty", "That zone is not in this hour's data.")); return; }
+  const s = zs.get(z.id);
+  const f = DATA.forecast.get(z.id);
+
+  box.appendChild(el("div", "eyebrow", `Zone ${z.id}`));
+  box.appendChild(el("h3", null, z.name));
+  box.appendChild(el("div", "sub", z.is_venue_zone ? "Venue zone" : `${z.distance_to_venue_km} km from the main venue`));
+
+  const ev = eventFor(z.id);
+  if (ev) {
+    box.appendChild(el("span", `chip ${ev.running ? "live" : "soon"}`,
+      ev.running ? `LIVE · ${ev.e.name}` : `In ${ev.away}h · ${ev.e.name}`));
+  }
+
+  box.appendChild(barRow("Occupancy now", z.occupancy_pct, `${z.occupancy_pct.toFixed(1)}%`));
+  box.appendChild(barRow(`Forecast +${FORECAST_AHEAD}h`, s ? s.fc : z.occupancy_pct, `${(s ? s.fc : z.occupancy_pct).toFixed(1)}%`));
+
+  const grid = el("div", "grid2");
+  grid.appendChild(stat("Beds free", fmt(z.spare_capacity)));
+  grid.appendChild(stat("Capacity", fmt(z.hotel_capacity)));
+  grid.appendChild(stat("Trend / hr", f ? `${f.trend_pct_per_hour > 0 ? "+" : ""}${f.trend_pct_per_hour}%` : "n/a"));
+  grid.appendChild(stat("Full in", f && f.hours_to_saturation != null ? `${f.hours_to_saturation}h` : "not soon"));
+  box.appendChild(grid);
+
+  // Redirect options.
+  const recs = extras.zid === z.id ? extras.recs : null;
+  if (recs && recs.options && recs.options.length) {
+    const sec = el("div");
+    sec.style.marginTop = "18px";
+    sec.appendChild(el("div", "eyebrow", "Redirect visitors to"));
+    recs.options.slice(0, 3).forEach((o, i) => {
+      const row = el("div", "row click");
+      row.setAttribute("role", "button");
+      row.tabIndex = 0;
+      const left = el("div");
+      left.appendChild(el("div", "nm", `${i + 1}. ${o.zone_name}`));
+      left.appendChild(el("div", "nt", `${fmt(o.spare_capacity)} beds free · ${o.distance_km} km`));
+      row.appendChild(left);
+      row.appendChild(el("b", null, `${Number(o.current_occupancy_pct).toFixed(0)}%`));
+      const go = () => selectZone(o.zone_id);
+      row.addEventListener("click", go);
+      row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+      sec.appendChild(row);
+    });
+    box.appendChild(sec);
+  }
+
+  // Venue: gates and floor zones.
+  const site = crowd && crowd.venues.find((q) => q.venue_zone_id === z.id);
+  if (site) {
+    const sec = el("div"); sec.style.marginTop = "18px";
+    sec.appendChild(el("div", "eyebrow", "Attendees on site, live"));
+    sec.appendChild(el("div", "sub", site.people != null ? `${site.people} attendees sharing their location at ${site.venue_name} right now.`
+      : site.few ? "A few attendees are here, too few to show a number without pointing at individuals." : "No attendees are sharing from here right now."));
+    box.appendChild(sec);
+  }
+
+  const v = venueFor(z.id);
+  if (v && v.gates && v.gates.length) {
+    const sec = el("div");
+    sec.style.marginTop = "18px";
+    sec.appendChild(el("div", "eyebrow", `${v.venue_name} · gates`));
+    v.gates.forEach((g) => {
+      const row = el("div", "row");
+      const left = el("div");
+      left.appendChild(el("div", "nm", g.name));
+      left.appendChild(el("div", "nt",
+        g.phase && g.phase !== "idle" ? `${g.phase} load ${g.load_ratio}x` : "no queue"));
+      row.appendChild(left);
+      const live = ["open", "restricted", "closed"].includes(g.live_status) ? g.live_status : "open";
+      row.appendChild(el("span", `badge ${live}`, live));
+      sec.appendChild(row);
+    });
+    box.appendChild(sec);
+  }
+
+  const dens = extras.zid === z.id ? extras.density : null;
+  if (dens && dens.length) {
+    const sec = el("div");
+    sec.style.marginTop = "18px";
+    sec.appendChild(el("div", "eyebrow", "Inside the venue"));
+    dens.forEach((d) => {
+      sec.appendChild(barRow(d.name, Math.min(100, d.occupancy_pct), `${d.occupancy_pct.toFixed(0)}%`));
+    });
+    box.appendChild(sec);
+  }
+}
+
+async function loadExtras(zid) {
+  const token = ++extraToken;
+  if (extras.zid !== zid) extras = { zid, recs: null, density: null };
+  const d = DATA;
+  if (!d) return;
+
+  let recs = null, density = null;
+  try {
+    if (d.recs && d.recs[zid]) recs = d.recs[zid];
+    else if (!STATIC) recs = await getJSON(`${API}/recommendations/${zid}?hour=${d.hour}`);
+  } catch (e) { /* the panel simply omits this section */ }
+
+  try {
+    const isVenue = d.venues.some((v) => v.zone_id === zid);
+    if (isVenue) {
+      if (d.density && d.density[zid]) density = d.density[zid];
+      else if (!STATIC) density = await getJSON(`${API}/density/${zid}?hour=${d.hour}`);
+    }
+  } catch (e) { /* likewise */ }
+
+  if (token !== extraToken) return;
+  extras = { zid, recs, density };
+  renderDetail();
+  R.onExtras();
+}
+
+function selectZone(id, fromParent) {
+  selected = id || null;
+  extraToken++;
+  extras = { zid: null, recs: null, density: null };
+  renderDetail();
+  R.onSelect();
+  if (selected) loadExtras(selected);
+  if (EMBED && !fromParent) window.parent.postMessage({ type: "select", id: selected }, location.origin);
+}
+
+// ---------------------------------------------------------------------------
+// Controls
+// ---------------------------------------------------------------------------
+function showBanner(msg) {
+  const b = $("banner");
+  if (!msg) { b.style.display = "none"; return; }
+  b.textContent = msg;
+  b.style.display = "block";
+}
+
+async function goHour(h) {
+  hour = clamp(Math.round(h), FIRST_HOUR, LAST_HOUR);
+  $("hour").value = String(hour);
+  $("hourLabel").textContent = hourLabel(hour);
+  const my = ++reqId;
+  try {
+    const d = await loadHour(hour);
+    if (my !== reqId) return;
+    showBanner("");
+    applyData(d);
+    wxOnHour();
+  } catch (e) {
+    if (my === reqId) showBanner(`Could not load hour ${hour}. ${STATIC ? "Is the data/ folder deployed?" : "Is the API running?"}`);
+  }
+}
+
+function setMode(m) {
+  mode = m;
+  R.onMode();
+  $("modeNow").setAttribute("aria-pressed", String(m === "now"));
+  $("modeFc").setAttribute("aria-pressed", String(m === "fc"));
+}
+
+let playTimer = null;
+function setPlaying(on) {
+  playing = on;
+  $("play").textContent = on ? "Pause" : "Play";
+  if (playTimer) { clearInterval(playTimer); playTimer = null; }
+  if (on) {
+    playTimer = setInterval(() => {
+      const next = hour >= LAST_HOUR ? FIRST_HOUR : hour + 1;
+      goHour(next);
+      const ahead = next >= LAST_HOUR ? FIRST_HOUR : next + 1;
+      loadHour(ahead).catch(() => {});
+    }, 1400);
+  }
+}
+
+$("play").addEventListener("click", () => setPlaying(!playing));
+$("hour").addEventListener("input", (e) => goHour(Number(e.target.value)));
+$("modeNow").addEventListener("click", () => setMode("now"));
+$("modeFc").addEventListener("click", () => setMode("fc"));
+$("zoomIn").addEventListener("click", () => R.zoomBy(1.15));
+$("zoomOut").addEventListener("click", () => R.zoomBy(1 / 1.15));
+$("reset").addEventListener("click", () => R.reset());
+async function demoCrowd(zone) {
+  try { await fetch(`${API}/presence/demo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ zone_id: zone, people: 60 }) }); } catch (e) { /* not available */ }
+  loadCrowd();
+}
+$("demoMetro").addEventListener("click", () => demoCrowd("Z04"));
+$("demoStadium").addEventListener("click", () => demoCrowd("Z01"));
+$("demoClear").addEventListener("click", async () => { try { await fetch(`${API}/presence/demo`, { method: "DELETE" }); } catch (e) { /* not available */ } loadCrowd(); });
+
+$("locateMe").addEventListener("click", () => {
+  if (!youPos()) { if (!EMBED) EPLocate.start(); setFollow(true); return; }
+  setFollow(!follow);
+});
+paintFollow();
+
+document.querySelectorAll("#layers button[data-layer]").forEach((b) => {
+  const key = b.getAttribute("data-layer");
+  b.setAttribute("aria-pressed", String(!!layers[key]));
+  b.addEventListener("click", () => {
+    layers[key] = !layers[key];
+    b.setAttribute("aria-pressed", String(layers[key]));
+    R.onLayers();
+  });
+});
+
+window.addEventListener("resize", resize);
+if (window.ResizeObserver) new ResizeObserver(resize).observe(cv.parentElement);
+
+// ---------------------------------------------------------------------------
+// Real 3D map renderer: MapLibre GL over a colourful street map (OpenFreeMap
+// "Liberty": parks, water, roads and relief in colour), with the zones drawn as
+// extruded towers, pressure as a heat surface on the ground, and transport links
+// as arcs. The basemap's building footprints are raised to their real heights and
+// shaded like architecture once you zoom in. Both basemaps are free and keyless;
+// if the first can't be reached the next is tried, and with neither the page falls
+// back to its own offline model.
+// ---------------------------------------------------------------------------
+const STYLES = [
+  { url: "https://tiles.openfreemap.org/styles/liberty", light: true },
+  { url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json", light: true },
+  { url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json", light: false },
+];
+// Filled in once a style has loaded: which source holds the buildings, which font the
+// style's server can deliver, and colours that read on that basemap.
+const BASE = { light: true, buildingSource: null, font: ["Noto Sans Regular"], fontBold: ["Noto Sans Bold"] };
+const INK = () => BASE.light
+  ? { text: "#10151c", halo: "rgba(255,255,255,0.95)", flow: "#12305a", mark: "#0d1b2e", hot: "#1d4f91" }
+  : { text: "#F2F2F2", halo: "#0A0A0A", flow: "#ffffff", mark: "#ffffff", hot: "#cfe6ff" };
+const MAP_LOAD_TIMEOUT_MS = 15000;
+const TOWER_R_M = 230;
+const TOWER_MAX_M = 1500;
+const HEAT_SIGMA_M = 1250;
+const HEAT_N = 72;
+const MAP_PITCH = 58;
+const TOWERS_OUT_ZOOM = 14.8;   // zoomed in past this, zone towers give way to the street view
+const MAP_BEARING = -24;
+const M_PER_DEG_LAT = 110570;
+
+let map = null;
+let mapReady = false;
+const ZONE_LL = new Map();     // zone id -> { lng, lat, name }
+const mapState = { userMoved: false, grid: null, dirty: true, lastUpdate: 0, lastFast: 0, lastCur: new Map(), arcs: new Map(), fitted: false };
+
+const mPerDegLng = (lat) => 111320 * Math.cos((lat * Math.PI) / 180);
+const emptyFC = () => ({ type: "FeatureCollection", features: [] });
+const feat = (geometry, properties) => ({ type: "Feature", properties: properties || {}, geometry });
+const rgbStr = (c) => `rgb(${Math.round(clamp(c[0], 0, 255))},${Math.round(clamp(c[1], 0, 255))},${Math.round(clamp(c[2], 0, 255))})`;
+
+function circleRing(lng, lat, rM, sides) {
+  const dLat = rM / M_PER_DEG_LAT, dLng = rM / mPerDegLng(lat);
+  const ring = [];
+  for (let k = 0; k <= sides; k++) {
+    const a = (k / sides) * Math.PI * 2;
+    ring.push([lng + Math.cos(a) * dLng, lat + Math.sin(a) * dLat]);
+  }
+  return ring;
+}
+
+function indexZones() {
+  ZONE_LL.clear();
+  DATA.zones.forEach((z) => ZONE_LL.set(z.id, { lng: z.lng, lat: z.lat, name: z.name }));
+}
+
+function buildGrid() {
+  const lngs = DATA.zones.map((z) => z.lng), lats = DATA.zones.map((z) => z.lat);
+  const minX = Math.min(...lngs), maxX = Math.max(...lngs), minY = Math.min(...lats), maxY = Math.max(...lats);
+  // Generous padding: the surface fades to nothing by the grid edge, so it never shows a hard border.
+  const padX = Math.max(0.03, (maxX - minX) * 0.6), padY = Math.max(0.028, (maxY - minY) * 0.6);
+  const x0 = minX - padX, x1 = maxX + padX, y0 = minY - padY, y1 = maxY + padY;
+  const lngC = (x0 + x1) / 2, latC = (y0 + y1) / 2, kx = mPerDegLng(latC);
+  const cells = [];
+  for (let j = 0; j < HEAT_N; j++) {
+    for (let i = 0; i < HEAT_N; i++) {
+      const xa = x0 + ((x1 - x0) * i) / HEAT_N, xb = x0 + ((x1 - x0) * (i + 1)) / HEAT_N;
+      const ya = y0 + ((y1 - y0) * j) / HEAT_N, yb = y0 + ((y1 - y0) * (j + 1)) / HEAT_N;
+      cells.push({
+        ring: [[xa, ya], [xb, ya], [xb, yb], [xa, yb], [xa, ya]],
+        mx: ((xa + xb) / 2 - lngC) * kx, my: ((ya + yb) / 2 - latC) * M_PER_DEG_LAT,
+      });
+    }
+  }
+  mapState.grid = { cells, lngC, latC, kx, bounds: [[minX, minY], [maxX, maxY]] };
+}
+
+// The same normalised-kernel field as the offline model: a weighted average of
+// nearby pressures, faded with distance, so a ring of busy-ish zones cannot
+// stack into a false hot spot.
+function heatFC() {
+  const g = mapState.grid;
+  const pts = [];
+  DATA.zones.forEach((z) => {
+    const s = zs.get(z.id), ll = ZONE_LL.get(z.id);
+    if (s && ll) pts.push({ mx: (ll.lng - g.lngC) * g.kx, my: (ll.lat - g.latC) * M_PER_DEG_LAT, p: pressure(s.cur) });
+  });
+  const s2 = 2 * HEAT_SIGMA_M * HEAT_SIGMA_M;
+  const features = [];
+  for (const cell of g.cells) {
+    let sw = 0, sp = 0;
+    for (const pt of pts) {
+      const dx = cell.mx - pt.mx, dy = cell.my - pt.my;
+      const w = Math.exp(-(dx * dx + dy * dy) / s2);
+      sw += w; sp += w * pt.p;
+    }
+    const v = sw > 1e-6 ? (sp / sw) * (1 - Math.exp(-3 * sw)) : 0;
+    if (v < 0.03) continue;
+    const fade = clamp((v - 0.03) / 0.12, 0, 1);
+    features.push(feat({ type: "Polygon", coordinates: [cell.ring] },
+      { color: rgbStr(ramp(v)), a: Number((fade * (0.16 + 0.38 * clamp(v, 0, 1))).toFixed(3)) }));
+  }
+  return { type: "FeatureCollection", features };
+}
+
+const towerHeight = (pct) => clamp(pct / 100, 0.03, 1.05) * TOWER_MAX_M;
+
+function towersFC() {
+  const features = [];
+  DATA.zones.forEach((z) => {
+    const s = zs.get(z.id), ll = ZONE_LL.get(z.id);
+    if (!s || !ll) return;
+    features.push(feat({ type: "Polygon", coordinates: [circleRing(ll.lng, ll.lat, TOWER_R_M, 14)] },
+      { id: z.id, h: towerHeight(s.cur), color: rgbStr(ramp(pressure(s.cur))) }));
+  });
+  return { type: "FeatureCollection", features };
+}
+
+// The pale extension above a tower showing where the forecast takes it.
+function towersFcFC() {
+  const features = [];
+  if (mode !== "now") return { type: "FeatureCollection", features };
+  DATA.zones.forEach((z) => {
+    const s = zs.get(z.id), ll = ZONE_LL.get(z.id);
+    if (!s || !ll || !(s.fc > s.cur + 1.5)) return;
+    features.push(feat({ type: "Polygon", coordinates: [circleRing(ll.lng, ll.lat, TOWER_R_M * 0.96, 14)] },
+      { id: z.id, h: towerHeight(s.cur), hf: towerHeight(s.fc) }));
+  });
+  return { type: "FeatureCollection", features };
+}
+
+function mapView() {
+  return map ? { zoom: map.getZoom(), pitch: map.getPitch() } : { zoom: 12, pitch: MAP_PITCH };
+}
+
+// Labels sit on the ground point, so lift each one by the tower's on-screen
+// height at the current zoom and pitch to land just above its top.
+function labelsFC(zoom, pitchDeg) {
+  const features = [];
+  const pitch = (pitchDeg * Math.PI) / 180;
+  DATA.zones.forEach((z) => {
+    const s = zs.get(z.id), ll = ZONE_LL.get(z.id);
+    if (!s || !ll) return;
+    // On a phone only the zones under pressure, and the selected one, get a name.
+    if (isNarrow() && s.cur < 75 && z.id !== selected) return;
+    const mpp = (40075016.686 * Math.cos((ll.lat * Math.PI) / 180)) / (512 * Math.pow(2, zoom));
+    // Sit on the tower's top; once towers have faded out (street level), sit on the ground.
+    const lift = clamp((TOWERS_OUT_ZOOM - zoom) / 0.8, 0, 1);
+    const topPx = (towerHeight(s.cur) / mpp) * Math.sin(pitch) * lift;
+    const ev = eventFor(z.id);
+    const tag = ev ? `${ev.running ? "LIVE" : `in ${ev.away}h`} · ${ev.e.name}\n` : "";
+    features.push(feat({ type: "Point", coordinates: [ll.lng, ll.lat] },
+      { id: z.id, label: `${tag}${z.name} · ${Math.round(s.cur)}%`, offset: [0, -(topPx + 8) / 12] }));
+  });
+  return { type: "FeatureCollection", features };
+}
+
+// A gently curved line between two zones; cached, since the geometry never changes.
+function arcCoords(a, b, bend) {
+  const dx = b.lng - a.lng, dy = b.lat - a.lat;
+  const cx = (a.lng + b.lng) / 2 - dy * bend, cy = (a.lat + b.lat) / 2 + dx * bend;
+  const pts = [];
+  for (let k = 0; k <= 24; k++) {
+    const t = k / 24, u = 1 - t;
+    pts.push([u * u * a.lng + 2 * u * t * cx + t * t * b.lng, u * u * a.lat + 2 * u * t * cy + t * t * b.lat]);
+  }
+  return pts;
+}
+
+function linkArc(l, idx) {
+  let c = mapState.arcs.get(l.link_id);
+  if (!c) {
+    const a = ZONE_LL.get(l.from_zone), b = ZONE_LL.get(l.to_zone);
+    if (!a || !b) return null;
+    c = arcCoords(a, b, idx % 2 === 0 ? 0.14 : -0.14);
+    mapState.arcs.set(l.link_id, c);
+  }
+  return c;
+}
+
+function linksFC() {
+  const features = [];
+  DATA.transport.forEach((l, i) => {
+    const st = ls.get(l.link_id), coords = linkArc(l, i);
+    if (!st || !coords) return;
+    features.push(feat({ type: "LineString", coordinates: coords }, {
+      color: rgbStr(ramp(pressure(st.cur * 0.85 + 15))),
+      w: 1 + (l.capacity_per_hour / 3600) * 1.6,
+      a: Number((0.3 + 0.45 * clamp(st.cur / 100, 0, 1)).toFixed(3)),
+      load: Math.round(st.cur),
+    }));
+  });
+  return { type: "FeatureCollection", features };
+}
+
+function pointAlong(coords, u) {
+  const f = clamp(u, 0, 0.9999) * (coords.length - 1), i = Math.floor(f), t = f - i;
+  return [coords[i][0] + (coords[i + 1][0] - coords[i][0]) * t, coords[i][1] + (coords[i + 1][1] - coords[i][1]) * t];
+}
+
+function flowFC(now) {
+  const features = [];
+  DATA.transport.forEach((l, i) => {
+    const st = ls.get(l.link_id), coords = linkArc(l, i);
+    if (!st || !coords) return;
+    const n = 1 + Math.floor(st.cur / 36), dir = i % 2 === 0 ? 1 : -1;
+    for (let k = 0; k < n; k++) {
+      let u = (now * 0.00005 * (0.4 + st.cur / 100) * dir + k / n + i * 0.13) % 1;
+      if (u < 0) u += 1;
+      features.push(feat({ type: "Point", coordinates: pointAlong(coords, u) }));
+    }
+  });
+  return { type: "FeatureCollection", features };
+}
+
+function selectionFC() {
+  const ll = selected && ZONE_LL.get(selected);
+  if (!ll) return emptyFC();
+  return { type: "FeatureCollection", features: [feat({ type: "LineString", coordinates: circleRing(ll.lng, ll.lat, TOWER_R_M * 2.4, 40) })] };
+}
+
+function redirectFCs() {
+  const lines = [], pts = [];
+  const src = selected && ZONE_LL.get(selected);
+  if (src && extras.zid === selected && extras.recs && extras.recs.options) {
+    extras.recs.options.slice(0, 3).forEach((o, k) => {
+      const dst = ZONE_LL.get(o.zone_id);
+      if (!dst) return;
+      lines.push(feat({ type: "LineString", coordinates: arcCoords(src, dst, k % 2 === 0 ? 0.1 : -0.1) }));
+      pts.push(feat({ type: "Point", coordinates: [dst.lng, dst.lat] }, { n: String(k + 1) }));
+    });
+  }
+  return [{ type: "FeatureCollection", features: lines }, { type: "FeatureCollection", features: pts }];
+}
+
+function beaconsFC(now) {
+  const features = [];
+  const ph = (now * 0.0006) % 1;
+  DATA.zones.forEach((z) => {
+    const ll = ZONE_LL.get(z.id), ev = eventFor(z.id);
+    if (!ll || !ev) return;
+    features.push(feat({ type: "LineString", coordinates: circleRing(ll.lng, ll.lat, TOWER_R_M * (1.7 + ph * 3.6), 40) },
+      { a: Number(((1 - ph) * (ev.running ? 0.8 : 0.45)).toFixed(3)) }));
+  });
+  return { type: "FeatureCollection", features };
+}
+
+function youFC() {
+  const p = youPos();
+  if (!p) return { point: emptyFC(), ring: emptyFC() };
+  const acc = clamp(p.accuracy || 30, 15, 400);
+  return {
+    point: { type: "FeatureCollection", features: [feat({ type: "Point", coordinates: [p.lng, p.lat] })] },
+    ring: { type: "FeatureCollection", features: [feat({ type: "Polygon", coordinates: [circleRing(p.lng, p.lat, acc, 40)] })] },
+  };
+}
+
+function crowdFC() {
+  return { type: "FeatureCollection", features: ((crowd && crowd.cells) || []).map((c) => feat({ type: "Point", coordinates: [c.lng, c.lat] }, { count: c.count })) };
+}
+function hotspotFC() {
+  return { type: "FeatureCollection", features: ((crowd && crowd.hotspots) || []).map((h) => feat({ type: "Point", coordinates: [h.lng, h.lat] }, { label: `${h.count} people` })) };
+}
+
+const LAYER_GROUPS = {
+  heat: ["heat-fill"],
+  towers: ["towers", "towers-fc", "beacons", "sel-line", "redir-line", "redir-pts", "redir-num"],
+  links: ["links-glow", "links"],
+  flow: ["flow"],
+  labels: ["zone-labels"],
+  you: ["you-ring", "you-halo", "you-dot"],
+  crowd: ["crowd-heat", "hotspot-dots", "hotspot-labels"],
+  weather: ["wx-flood", "wx-rain", "wx-links", "wx-chain", "wx-storm-fill", "wx-storm-line", "wx-social", "wx-social-n", "wx-labels"],
+};
+
+function setData(id, fc) {
+  const src = map.getSource(id);
+  if (src) src.setData(fc);
+}
+
+function addMapLayers() {
+  const firstSymbol = map.getStyle().layers.find((l) => l.type === "symbol");
+  const before = firstSymbol ? firstSymbol.id : undefined;
+  ["heat", "links", "flow", "towers", "towers-fc", "sel", "redir", "redir-pts", "beacons", "labels", "you", "you-ring", "crowd", "hotspots",
+   "wx-zones", "wx-flood", "wx-links", "wx-chain", "wx-storm", "wx-social"]
+    .forEach((id) => map.addSource(id, { type: "geojson", data: emptyFC() }));
+
+  map.addLayer({ id: "heat-fill", type: "fill", source: "heat",
+    paint: { "fill-color": ["get", "color"], "fill-antialias": false,
+      // Fades as you zoom in, so streets and buildings stay readable up close.
+      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 12, ["get", "a"], 16, ["*", ["get", "a"], 0.7]] } }, before);
+
+  // The basemap's footprints as architecture: raised to their real heights (rising in as
+  // you zoom), low buildings in warm stone, towers in cool glass, lit from one side.
+  const h = ["coalesce", ["get", "render_height"], ["get", "height"], 8];
+  const grow = (v) => ["interpolate", ["linear"], ["zoom"], 13, 0, 14.5, v];
+  if (BASE.buildingSource) {
+    map.addLayer({ id: "bld3d", type: "fill-extrusion", source: BASE.buildingSource, "source-layer": "building", minzoom: 13,
+      filter: ["!=", ["get", "hide_3d"], true],
+      paint: {
+        "fill-extrusion-color": BASE.light
+          ? ["interpolate", ["linear"], h, 0, "#efe3cf", 12, "#e4cfae", 30, "#d6bfa0", 60, "#b7c6d6", 120, "#8ea8c6", 250, "#6d8bb0"]
+          : ["interpolate", ["linear"], h, 0, "#2c3137", 60, "#39414b", 200, "#4a5563"],
+        "fill-extrusion-height": grow(h),
+        "fill-extrusion-base": grow(["coalesce", ["get", "render_min_height"], 0]),
+        "fill-extrusion-opacity": BASE.light ? 0.92 : 0.85,
+        "fill-extrusion-vertical-gradient": true,
+      } }, before);
+  }
+
+  // Attendee crowd, in blue-to-white so it never reads as the green-to-red zone pressure.
+  map.addLayer({ id: "crowd-heat", type: "heatmap", source: "crowd", paint: {
+    "heatmap-weight": ["interpolate", ["linear"], ["get", "count"], 1, 0.2, 20, 1],
+    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 10, 1.2, 15, 3],
+    "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 10, 26, 15, 70],
+    "heatmap-opacity": 0.9,
+    "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(77,163,255,0)", 0.2, "rgba(77,163,255,0.4)",
+      0.5, "rgba(140,120,255,0.7)", 0.8, "rgba(230,140,255,0.9)", 1, "rgba(255,255,255,0.98)"] } }, map.getLayer("bld3d") ? "bld3d" : before);
+  map.addLayer({ id: "hotspot-dots", type: "circle", source: "hotspots",
+    paint: { "circle-color": "#8fc4ff", "circle-radius": 5, "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
+  map.addLayer({ id: "hotspot-labels", type: "symbol", source: "hotspots",
+    layout: { "text-field": ["get", "label"], "text-font": BASE.fontBold, "text-size": 11.5,
+      "text-anchor": "top", "text-offset": [0, 0.8], "text-allow-overlap": true },
+    paint: { "text-color": INK().hot, "text-halo-color": INK().halo, "text-halo-width": 2 } });
+
+  // Weather: flood risk on the ground, rain as soft blue discs, links the weather cuts,
+  // the storm's footprint, and the chain from each cause to its effect.
+  map.addLayer({ id: "wx-flood", type: "fill", source: "wx-flood", paint: {
+    "fill-color": ["interpolate", ["linear"], ["get", "p"], 0.1, "#6fb4ff", 0.5, "#3565e0", 0.9, "#6a2fe0"],
+    "fill-opacity": ["interpolate", ["linear"], ["get", "p"], 0.1, 0.12, 0.5, 0.32, 1, 0.5] } }, before);
+  map.addLayer({ id: "wx-storm-fill", type: "fill", source: "wx-storm", paint: { "fill-color": "#4DA3FF", "fill-opacity": 0.1 } }, before);
+  map.addLayer({ id: "wx-storm-line", type: "line", source: "wx-storm",
+    paint: { "line-color": "#2f7fe0", "line-width": 2, "line-dasharray": [3, 2], "line-opacity": 0.9 } }, before);
+  map.addLayer({ id: "wx-rain", type: "circle", source: "wx-zones", filter: [">", ["get", "rain"], 0.2], paint: {
+    "circle-color": "#3f8cff", "circle-blur": 0.7,
+    "circle-opacity": ["interpolate", ["linear"], ["get", "rain"], 0.2, 0.2, 10, 0.45, 60, 0.7],
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, ["interpolate", ["linear"], ["get", "rain"], 0.2, 10, 60, 40],
+                                                             15, ["interpolate", ["linear"], ["get", "rain"], 0.2, 60, 60, 220]] } }, before);
+  map.addLayer({ id: "wx-links", type: "line", source: "wx-links", layout: { "line-cap": "round" }, paint: {
+    "line-color": ["interpolate", ["linear"], ["get", "lost"], 10, "#E8A33D", 60, "#d6283b"],
+    "line-width": ["interpolate", ["linear"], ["get", "lost"], 10, 3, 80, 8], "line-dasharray": [1.5, 1], "line-opacity": 0.95 } });
+  map.addLayer({ id: "wx-chain", type: "line", source: "wx-chain", layout: { "line-cap": "round" }, paint: {
+    "line-color": ["match", ["get", "order"], 1, "#4DA3FF", 2, "#E8A33D", "#FF3B1F"], "line-width": 2.5,
+    "line-dasharray": [0.6, 1.4], "line-opacity": 0.85 } });
+
+  map.addLayer({ id: "links-glow", type: "line", source: "links", filter: [">=", ["get", "load"], 85],
+    layout: { "line-cap": "round" },
+    paint: { "line-color": ["get", "color"], "line-opacity": 0.16, "line-blur": 3,
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5, 15, 12] } }, before);
+  map.addLayer({ id: "links", type: "line", source: "links", layout: { "line-cap": "round" },
+    paint: { "line-color": ["get", "color"], "line-opacity": ["get", "a"],
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, ["*", ["get", "w"], 0.9], 15, ["*", ["get", "w"], 3]] } }, before);
+
+  // Zone towers are a city-scale reading. At street level you'd be standing inside one,
+  // so they fade out as you zoom in and the heat on the ground carries the same story.
+  map.addLayer({ id: "towers", type: "fill-extrusion", source: "towers", maxzoom: TOWERS_OUT_ZOOM,
+    paint: { "fill-extrusion-color": ["get", "color"], "fill-extrusion-height": ["get", "h"], "fill-extrusion-base": 0,
+      "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0.95, 13.8, 0.7, TOWERS_OUT_ZOOM, 0] } });
+  map.addLayer({ id: "towers-fc", type: "fill-extrusion", source: "towers-fc", maxzoom: TOWERS_OUT_ZOOM,
+    paint: { "fill-extrusion-color": "#ffffff", "fill-extrusion-height": ["get", "hf"], "fill-extrusion-base": ["get", "h"],
+      "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0.24, TOWERS_OUT_ZOOM, 0] } });
+
+  map.addLayer({ id: "beacons", type: "line", source: "beacons", maxzoom: TOWERS_OUT_ZOOM,
+    paint: { "line-color": INK().mark, "line-opacity": ["get", "a"], "line-width": 2 } });
+  map.addLayer({ id: "sel-line", type: "line", source: "sel", paint: { "line-color": INK().mark, "line-width": 2.5, "line-opacity": 0.95 } });
+  map.addLayer({ id: "flow", type: "circle", source: "flow",
+    paint: { "circle-color": INK().flow, "circle-opacity": 0.9, "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 2, 15, 4.5],
+      "circle-stroke-color": BASE.light ? "#ffffff" : "rgba(0,0,0,0)", "circle-stroke-width": BASE.light ? 1 : 0 } });
+  map.addLayer({ id: "redir-line", type: "line", source: "redir", layout: { "line-cap": "round" },
+    paint: { "line-color": "#7FD4FF", "line-width": 2.5, "line-dasharray": [2, 1.6], "line-opacity": 0.95 } });
+  map.addLayer({ id: "redir-pts", type: "circle", source: "redir-pts",
+    paint: { "circle-color": "rgba(127,212,255,0.2)", "circle-stroke-color": "#7FD4FF", "circle-stroke-width": 1.5, "circle-radius": 11 } });
+  map.addLayer({ id: "redir-num", type: "symbol", source: "redir-pts",
+    layout: { "text-field": ["get", "n"], "text-font": BASE.fontBold, "text-size": 12, "text-allow-overlap": true },
+    paint: { "text-color": "#7FD4FF" } });
+
+  // Where the visitor is: an accuracy ring, a pulsing halo and a solid dot, drawn above the towers.
+  map.addLayer({ id: "you-ring", type: "fill", source: "you-ring", paint: { "fill-color": "#4DA3FF", "fill-opacity": 0.14 } });
+  map.addLayer({ id: "you-halo", type: "circle", source: "you", paint: { "circle-color": "#4DA3FF", "circle-opacity": 0.28, "circle-radius": 16 } });
+  map.addLayer({ id: "you-dot", type: "circle", source: "you",
+    paint: { "circle-color": "#4DA3FF", "circle-radius": 7, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.5 } });
+
+  map.addLayer({ id: "wx-social", type: "circle", source: "wx-social", paint: {
+    "circle-color": "#9b6bff", "circle-radius": ["interpolate", ["linear"], ["get", "n"], 1, 7, 6, 12],
+    "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+  map.addLayer({ id: "wx-social-n", type: "symbol", source: "wx-social", layout: {
+    "text-field": ["to-string", ["get", "n"]], "text-font": BASE.fontBold, "text-size": 11, "text-allow-overlap": true },
+    paint: { "text-color": "#ffffff" } });
+  map.addLayer({ id: "wx-labels", type: "symbol", source: "wx-zones", layout: {
+    "text-field": ["get", "label"], "text-font": BASE.font, "text-size": 11.5, "text-anchor": "top", "text-offset": [0, 1.1],
+    "text-allow-overlap": false, "text-max-width": 12 },
+    paint: { "text-color": BASE.light ? "#0e3a73" : "#bcdcff", "text-halo-color": INK().halo, "text-halo-width": 2 } });
+
+  map.addLayer({ id: "zone-labels", type: "symbol", source: "labels",
+    layout: { "text-field": ["get", "label"], "text-font": BASE.fontBold,
+      "text-size": 12, "text-anchor": "bottom", "text-offset": ["array", "number", 2, ["get", "offset"]],
+      "text-allow-overlap": true, "text-ignore-placement": true, "text-max-width": 14 },
+    paint: { "text-color": INK().text, "text-halo-color": INK().halo, "text-halo-width": 2 } });
+
+  // Depth: a sky and haze on the horizon when tilted, and light from the south-west
+  // so building faces shade differently.
+  try {
+    map.setSky(BASE.light
+      ? { "sky-color": "#7fb8f0", "horizon-color": "#dcecfb", "fog-color": "#eef5fc", "sky-horizon-blend": 0.55,
+          "horizon-fog-blend": 0.6, "fog-ground-blend": 0.35, "atmosphere-blend": 0.6 }
+      : { "sky-color": "#0b1320", "horizon-color": "#1a2433", "fog-color": "#0A0A0A", "sky-horizon-blend": 0.5,
+          "horizon-fog-blend": 0.5, "fog-ground-blend": 0.3, "atmosphere-blend": 0.4 });
+    map.setLight({ anchor: "map", position: [1.4, 215, 40], color: "#fff8ee", intensity: BASE.light ? 0.42 : 0.3 });
+  } catch (e) { /* older renderer: flat is fine */ }
+}
+
+function applyVisibility() {
+  Object.keys(LAYER_GROUPS).forEach((k) => {
+    LAYER_GROUPS[k].forEach((id) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", layers[k] ? "visible" : "none");
+    });
+  });
+}
+
+// Zoom past the bare "fit" by this much. fitBounds leaves a wide margin for a
+// tilted, rotated camera, so on its own the city looks lost in the frame.
+const FIT_ZOOM_BOOST = 0.75;
+
+function fitCity(animate) {
+  if (!mapState.grid) return;
+  const cam = map.cameraForBounds(mapState.grid.bounds, {
+    padding: { top: 60, bottom: 40, left: 40, right: 40 }, bearing: MAP_BEARING, maxZoom: 14,
+  });
+  if (!cam) return;
+  map.easeTo({
+    center: cam.center, zoom: Math.min(14, cam.zoom + (isNarrow() ? 0.1 : FIT_ZOOM_BOOST)),
+    pitch: MAP_PITCH, bearing: MAP_BEARING, duration: animate ? 700 : 0,
+  });
+}
+
+function updateMainSources(now) {
+  const v = mapView();
+  setData("heat", layers.heat ? heatFC() : emptyFC());
+  setData("towers", towersFC());
+  setData("towers-fc", towersFcFC());
+  setData("links", layers.links ? linksFC() : emptyFC());
+  setData("labels", labelsFC(v.zoom, v.pitch));
+  DATA.zones.forEach((z) => { const s = zs.get(z.id); if (s) mapState.lastCur.set(z.id, s.cur); });
+  ls.forEach((s, id) => mapState.lastCur.set(id, s.cur));
+  mapState.dirty = false;
+  mapState.lastUpdate = now;
+}
+
+function movedSinceUpdate() {
+  let worst = 0;
+  zs.forEach((s, id) => { worst = Math.max(worst, Math.abs(s.cur - (mapState.lastCur.get(id) ?? -999))); });
+  ls.forEach((s, id) => { worst = Math.max(worst, Math.abs(s.cur - (mapState.lastCur.get(id) ?? -999))); });
+  return worst > 0.04;
+}
+
+function drawYou() {
+  if (!map || !mapReady) return;
+  const y = youFC();
+  setData("you", y.point); setData("you-ring", y.ring);
+}
+
+let mapLastT = 0;
+function mapLoop(now) {
+  requestAnimationFrame(mapLoop);
+  if (!mapReady || !DATA || offscreen) return;
+
+  step(now);
+  const dt = mapLastT ? Math.min(0.05, (now - mapLastT) / 1000) : 0.016;
+  mapLastT = now;
+  if (layers.orbit) map.setBearing(map.getBearing() + dt * 8);
+
+  if ((mapState.dirty || movedSinceUpdate()) && now - mapState.lastUpdate >= 70) updateMainSources(now);
+
+  if (now - mapState.lastFast >= 60) {
+    mapState.lastFast = now;
+    if (layers.flow) setData("flow", flowFC(now));
+    setData("beacons", layers.towers ? beaconsFC(now) : emptyFC());
+    if (youPos()) map.setPaintProperty("you-halo", "circle-radius", 14 + 7 * Math.sin(now / 420));
+  }
+}
+
+function queryZoneAt(point) {
+  const ls_ = ["towers", "zone-labels"].filter((id) => map.getLayer(id));
+  const f = map.queryRenderedFeatures(point, { layers: ls_ });
+  return f.length ? f[0].properties.id : null;
+}
+
+function setupMapRenderer() {
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+  addMapLayers();
+  applyVisibility();
+  mapReady = true;
+
+  // A few of the colourful style's point-of-interest icons aren't in its sprite sheet.
+  // Stand in a blank one, so the place name still shows and nothing is logged.
+  map.on("styleimagemissing", (e) => {
+    if (!map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+  });
+  map.on("movestart", (e) => { if (e.originalEvent) mapState.userMoved = true; });
+  map.on("dragstart", (e) => { if (e.originalEvent && follow && youPos()) setFollow(false); });
+  map.on("click", (e) => {
+    if (wx.placing) { wxPlaceStorm(e.lngLat.lat, e.lngLat.lng); return; }
+    const hit = map.queryRenderedFeatures(e.point, { layers: ["wx-social"].filter((id) => map.getLayer(id)) });
+    if (hit.length) { wxShowSocialAt(hit[0].properties.zone_id); return; }
+    selectZone(queryZoneAt(e.point));
+  });
+  map.on("mousemove", (e) => {
+    const id = queryZoneAt(e.point);
+    hovered = id;
+    map.getCanvas().style.cursor = id ? "pointer" : "";
+    showTip(id, e.point.x, e.point.y);
+  });
+  map.on("mouseout", () => { hovered = null; showTip(null); });
+  const relabel = () => { if (DATA) setData("labels", labelsFC(mapView().zoom, mapView().pitch)); };
+  map.on("zoom", relabel);
+  map.on("pitch", relabel);
+
+  R.onData = () => {
+    if (!mapState.grid) { indexZones(); buildGrid(); }
+    if (!mapState.fitted) {
+      mapState.fitted = true;
+      if (follow && youPos()) followUpdate(true); else fitCity(false);
+    }
+    mapState.dirty = true;
+  };
+  R.onSelect = () => { const v = mapView(); setData("labels", labelsFC(v.zoom, v.pitch)); setData("sel", selectionFC()); const [l, p] = redirectFCs(); setData("redir", l); setData("redir-pts", p); };
+  R.onExtras = R.onSelect;
+  R.onLayers = () => { applyVisibility(); mapState.dirty = true; R.onWeather(); $("wxKey").hidden = !wx.available || !layers.weather; };
+  R.onMode = () => { mapState.dirty = true; };
+  R.zoomBy = (f) => map.zoomTo(map.getZoom() + Math.log2(f), { duration: 250 });
+  R.reset = () => { if (follow) setFollow(false); mapState.userMoved = false; fitCity(true); };
+  R.onYou = drawYou;
+  R.onCrowd = () => { setData("crowd", crowdFC()); setData("hotspots", hotspotFC()); };
+  R.onWeather = () => {
+    const f = wxFeatures();
+    setData("wx-zones", f.zones); setData("wx-flood", f.flood); setData("wx-links", f.links);
+    setData("wx-chain", f.chain); setData("wx-storm", f.storm); setData("wx-social", f.social);
+  };
+  R.onWeather();
+  R.flyTo = (lng, lat) => { if (follow) setFollow(false); mapState.userMoved = true; map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14), pitch: MAP_PITCH, duration: 900 }); };
+  drawYou();
+
+  if (DATA) R.onData();
+  requestAnimationFrame(mapLoop);
+}
+
+// Read what this basemap offers, and take out the parts we draw ourselves.
+function prepareStyle(style) {
+  const bld = style.layers.find((l) => l["source-layer"] === "building");
+  BASE.buildingSource = bld ? bld.source : null;
+  // Fonts: use what the style's own labels use, so the glyph server has them.
+  const fonts = style.layers.map((l) => l.layout && l.layout["text-font"]).filter((f) => Array.isArray(f) && typeof f[0] === "string");
+  if (fonts.length) {
+    const flat = fonts.map((f) => f[0]);
+    BASE.font = [flat.find((f) => /Regular|Medium/.test(f)) || flat[0]];
+    BASE.fontBold = [flat.find((f) => /Bold/.test(f)) || BASE.font[0]];
+  }
+  // Our building layer replaces the style's plain grey extrusion.
+  style.layers = style.layers.filter((l) => !(l.type === "fill-extrusion" && l["source-layer"] === "building"));
+}
+
+async function initMap() {
+  // Fetch the style ourselves first: if we are offline this fails at once,
+  // rather than after a long wait for the map to give up.
+  let style = null;
+  for (const cand of STYLES) {
+    try {
+      const res = await fetch(cand.url);
+      if (!res.ok) continue;
+      style = await res.json();
+      BASE.light = cand.light;
+      break;
+    } catch (e) { /* try the next basemap */ }
+  }
+  if (!style) return false;
+  prepareStyle(style);
+
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok) => { if (!done) { done = true; clearTimeout(timer); resolve(ok); } };
+    const timer = setTimeout(() => finish(false), MAP_LOAD_TIMEOUT_MS);
+    try {
+      map = new maplibregl.Map({
+        container: "map", style, center: [72.86, 19.07], zoom: 11.8, pitch: MAP_PITCH, bearing: MAP_BEARING,
+        maxPitch: 78, attributionControl: { compact: true },
+      });
+    } catch (e) { finish(false); return; }
+    map.on("load", () => finish(true));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Offline fallback: the canvas model above, used when WebGL or the map tiles
+// are unavailable.
+// ---------------------------------------------------------------------------
+function useCanvas() {
+  document.body.classList.add("canvas-mode");
+  R.zoomBy = (f) => { view.zoom = clamp(view.zoom * f, 0.6, 2.4); };
+  R.reset = () => { view.yaw = VIEW_DEFAULT.yaw; view.pitch = VIEW_DEFAULT.pitch; view.zoom = VIEW_DEFAULT.zoom; };
+  resize();
+  requestAnimationFrame(frame);
+}
+
+function renderNote(text) {
+  const n = $("renderNote");
+  n.textContent = text || "";
+  n.style.display = text ? "block" : "none";
+}
+
+function hasWebGL() {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch (e) { return false; }
+}
+
+async function chooseRenderer() {
+  if (typeof maplibregl !== "undefined" && hasWebGL()) {
+    let ok = await initMap();
+    if (ok) {
+      // A layer that fails to build must not leave a half-drawn map behind.
+      try { setupMapRenderer(); return "map"; } catch (e) { console.error("Map setup failed:", e); mapReady = false; ok = false; }
+    }
+    if (map) { try { map.remove(); } catch (e) { /* already gone */ } map = null; }
+    renderNote("The 3D map couldn't load (offline, or WebGL is unavailable), so this is the offline model.");
+  } else {
+    renderNote("3D maps need WebGL, which isn't available here, so this is the offline model.");
+  }
+  useCanvas();
+  return "canvas";
+}
+
+// The dashboard this may be embedded in drives the clock and the selection.
+window.addEventListener("message", (e) => {
+  if (e.origin !== location.origin) return;
+  const m = e.data || {};
+  if (m.type === "you") {
+    embeddedYou = Number.isFinite(m.lat) && Number.isFinite(m.lng)
+      ? { lat: m.lat, lng: m.lng, accuracy: m.accuracy, heading: m.heading, speed: m.speed } : null;
+    youChanged();
+  }
+  else if (m.type === "visible") offscreen = !m.on;
+  else if (m.type === "hour" && Number.isFinite(Number(m.hour))) goHour(Number(m.hour));
+  else if (m.type === "select" && (m.id || null) !== selected) selectZone(m.id || null, true);
+});
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+(function boot() {
+  const q = params0.get("hour");
+  const zoneParam = params0.get("zone");
+  const start = q && !Number.isNaN(Number(q)) ? Number(q) : 110;
+  resize();
+  $("hourLabel").textContent = hourLabel(clamp(start, FIRST_HOUR, LAST_HOUR));
+  renderDetail();
+  chooseRenderer();
+  renderNearYou();
+  if (!EMBED) { EPLocate.onChange(youChanged); EPLocate.mountBanner(); EPPresence.init(); EPLocate.autoStart(); }
+  initCrowd();
+  initWeather();
+  goHour(start).then(() => { if (zoneParam) selectZone(zoneParam); });
+  if (EMBED) window.parent.postMessage({ type: "ready" }, location.origin);
+})();
+</script>
+</body>
+</html>

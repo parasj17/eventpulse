@@ -1,0 +1,8 @@
+# Python dependencies for the Vercel function (api/index.py). scikit-learn is left out to fit
+# Vercel's function size limit; the ML scorecard then serves its saved results.
+fastapi==0.115.5
+pandas==2.2.3
+numpy==2.1.3
+httpx==0.28.1
+python-multipart==0.0.32
+psycopg[binary]>=3.2
